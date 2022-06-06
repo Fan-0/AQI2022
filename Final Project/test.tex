@@ -1,0 +1,1079 @@
+\hypertarget{9f68e53c-23fe-4409-bcfe-ba4cfad5d9d9}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\ImportTok{import}\NormalTok{ qiskit }\ImportTok{as}\NormalTok{ qk}
+\ImportTok{import}\NormalTok{ numpy }\ImportTok{as}\NormalTok{ np}
+\ImportTok{from}\NormalTok{ qiskit.tools.visualization }\ImportTok{import}\NormalTok{ plot\_histogram}
+\ImportTok{from}\NormalTok{ qiskit }\ImportTok{import}\NormalTok{ IBMQ}
+\ImportTok{from}\NormalTok{ qiskit.tools.monitor }\ImportTok{import}\NormalTok{ job\_monitor}
+\ImportTok{from}\NormalTok{ qiskit.providers.aer.noise }\ImportTok{import}\NormalTok{ NoiseModel}
+\ImportTok{import}\NormalTok{ matplotlib}
+\ImportTok{import}\NormalTok{ matplotlib.pyplot }\ImportTok{as}\NormalTok{ plt}
+\ImportTok{from}\NormalTok{ qiskit.visualization }\ImportTok{import}\NormalTok{ plot\_bloch\_multivector}
+\ImportTok{from}\NormalTok{ qiskit.tools.monitor }\ImportTok{import}\NormalTok{ job\_monitor}
+\OperatorTok{\%}\NormalTok{matplotlib inline}
+\ImportTok{from}\NormalTok{ IPython.display }\ImportTok{import}\NormalTok{ display}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{4f941e56-adb5-4919-bce4-6188aa7ddd7e}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\ImportTok{import}\NormalTok{ warnings}
+\NormalTok{warnings.filterwarnings(}\StringTok{\textquotesingle{}ignore\textquotesingle{}}\NormalTok{)}
+\ImportTok{from}\NormalTok{ qiskit.tools.jupyter }\ImportTok{import} \OperatorTok{*}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{f174d04f-8a68-4d83-bb0e-f34c245eacf9}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{token }\OperatorTok{=} \StringTok{\textquotesingle{}b6464d13b284902ed1d1a48d2aed6bd0474c7be45011741b0fb879614419659cb722e74a046af3d5caae0398aec9bdac8843068ecbee91aff466cf3e30f3bef5\textquotesingle{}}
+\ControlFlowTok{try}\NormalTok{:}
+\NormalTok{    IBMQ.load\_account()}
+\ControlFlowTok{except}\NormalTok{:}
+\NormalTok{    qk.IBMQ.save\_account(token}\OperatorTok{=}\NormalTok{token)}
+\NormalTok{    qk.IBMQ.enable\_account(token)}
+\NormalTok{provider }\OperatorTok{=}\NormalTok{ IBMQ.get\_provider(hub}\OperatorTok{=}\StringTok{"ibm{-}q"}\NormalTok{, group}\OperatorTok{=}\StringTok{"open"}\NormalTok{, project}\OperatorTok{=}\StringTok{"main"}\NormalTok{)}
+\NormalTok{backend }\OperatorTok{=}\NormalTok{ provider.get\_backend(}\StringTok{"ibmq\_armonk"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{4b373e23-a658-4382-b744-95ed4f4b8214}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{backend\_config }\OperatorTok{=}\NormalTok{ backend.configuration()}
+\ControlFlowTok{assert}\NormalTok{ backend\_config.open\_pulse, }\StringTok{"Backend doesn\textquotesingle{}t support Pulse"}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{69fe775c-142b-4dcb-b68b-47940c7e72a3}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{dt }\OperatorTok{=}\NormalTok{ backend\_config.dt}
+\BuiltInTok{print}\NormalTok{(}\SpecialStringTok{f"Sampling time: }\SpecialCharTok{\{}\NormalTok{dt}\OperatorTok{*}\FloatTok{1e9}\SpecialCharTok{\}}\SpecialStringTok{ ns"}\NormalTok{) }
+\NormalTok{backend\_defaults }\OperatorTok{=}\NormalTok{ backend.defaults()}
+\BuiltInTok{print}\NormalTok{(backend\_defaults)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+Sampling time: 0.2222222222222222 ns
+<PulseDefaults(<InstructionScheduleMap(1Q instructions:
+  q0: {'id', 'u1', 'measure', 'rz', 'sx', 'x', 'u3', 'u2'}
+Multi qubit instructions:
+)>Qubit Frequencies [GHz]
+[4.9716805437955225]
+Measurement Frequencies [GHz]
+[6.993370669] )>
+\end{verbatim}
+
+\hypertarget{fd6aa8b0-c714-4255-9b74-a3b750c321e6}{}
+\hypertarget{setteing-up-frequency-sweep}{%
+\section{Setteing up Frequency
+Sweep}\label{setteing-up-frequency-sweep}}
+
+\leavevmode\vadjust pre{\hypertarget{af158817-2c73-4e66-b679-95f461d51480}{}}%
+We will first condunct Frequency sweep over a large range to identify
+our transiton energies
+
+\hypertarget{d5d7ed8b-5e53-4b6c-bada-e71c0d60b18e}{}
+\hypertarget{initial-frequency-0-1}{%
+\section{Initial Frequency
+0-\textgreater1}\label{initial-frequency-0-1}}
+
+\hypertarget{a152d6f7-5311-4312-8ce7-829a719c7cba}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\ImportTok{import}\NormalTok{ numpy }\ImportTok{as}\NormalTok{ np}
+
+\CommentTok{\# unit conversion factors {-}\textgreater{} all backend properties returned in SI (Hz, sec, etc.)}
+\NormalTok{GHz }\OperatorTok{=} \FloatTok{1.0e9} \CommentTok{\# Gigahertz}
+\NormalTok{MHz }\OperatorTok{=} \FloatTok{1.0e6} \CommentTok{\# Megahertz}
+\NormalTok{us }\OperatorTok{=} \FloatTok{1.0e{-}6} \CommentTok{\# Microseconds}
+\NormalTok{ns }\OperatorTok{=} \FloatTok{1.0e{-}9} \CommentTok{\# Nanoseconds}
+
+\CommentTok{\# We will find the qubit frequency for the following qubit.}
+\NormalTok{qubit }\OperatorTok{=} \DecValTok{0}
+\CommentTok{\# We will define memory slot channel 0.}
+\NormalTok{mem\_slot }\OperatorTok{=} \DecValTok{0}
+
+\CommentTok{\# The sweep will be centered around the estimated qubit frequency.}
+\NormalTok{center\_frequency\_Hz }\OperatorTok{=}\NormalTok{ backend\_defaults.qubit\_freq\_est[qubit]        }\CommentTok{\# The default frequency is given in Hz}
+                                                                    \CommentTok{\# warning: this will change in a future release}
+\BuiltInTok{print}\NormalTok{(}\SpecialStringTok{f"Qubit }\SpecialCharTok{\{}\NormalTok{qubit}\SpecialCharTok{\}}\SpecialStringTok{ has an estimated frequency of }\SpecialCharTok{\{}\NormalTok{center\_frequency\_Hz }\OperatorTok{/}\NormalTok{ GHz}\SpecialCharTok{\}}\SpecialStringTok{ GHz."}\NormalTok{)}
+
+\CommentTok{\# scale factor to remove factors of 10 from the data}
+\NormalTok{scale\_factor }\OperatorTok{=} \FloatTok{1e{-}15}
+
+\CommentTok{\# We will sweep 40 MHz around the estimated frequency}
+\NormalTok{frequency\_span\_Hz }\OperatorTok{=} \DecValTok{20} \OperatorTok{*}\NormalTok{ MHz}
+\CommentTok{\# in steps of 1 MHz.}
+\NormalTok{frequency\_step\_Hz }\OperatorTok{=} \DecValTok{1} \OperatorTok{*}\NormalTok{ MHz}
+\NormalTok{a}\OperatorTok{=}\DecValTok{0}
+\CommentTok{\# We will sweep 20 MHz above and 20 MHz below the estimated frequency}
+\NormalTok{frequency\_min }\OperatorTok{=}\NormalTok{ center\_frequency\_Hz }\OperatorTok{{-}}\NormalTok{ frequency\_span\_Hz }\OperatorTok{/} \DecValTok{2}
+\NormalTok{frequency\_max }\OperatorTok{=}\NormalTok{ center\_frequency\_Hz }\OperatorTok{+}\NormalTok{ frequency\_span\_Hz }\OperatorTok{/} \DecValTok{2}
+\CommentTok{\# Construct an np array of the frequencies for our experiment}
+\NormalTok{frequencies\_GHz }\OperatorTok{=}\NormalTok{ np.arange((frequency\_min }\OperatorTok{/}\NormalTok{ GHz)}\OperatorTok{{-}}\NormalTok{a, }
+\NormalTok{                            (frequency\_max }\OperatorTok{/}\NormalTok{ GHz)}\OperatorTok{+}\NormalTok{a, }
+\NormalTok{                            frequency\_step\_Hz }\OperatorTok{/}\NormalTok{ GHz)}
+
+\BuiltInTok{print}\NormalTok{(}\SpecialStringTok{f"The sweep will go from }\SpecialCharTok{\{}\NormalTok{frequency\_min }\OperatorTok{/}\NormalTok{ GHz}\SpecialCharTok{\}}\SpecialStringTok{ GHz to }\SpecialCharTok{\{}\NormalTok{frequency\_max }\OperatorTok{/}\NormalTok{ GHz}\SpecialCharTok{\}}\SpecialStringTok{ GHz }\CharTok{\textbackslash{}}
+\SpecialStringTok{in steps of }\SpecialCharTok{\{}\NormalTok{frequency\_step\_Hz }\OperatorTok{/}\NormalTok{ MHz}\SpecialCharTok{\}}\SpecialStringTok{ MHz."}\NormalTok{)}
+\BuiltInTok{print}\NormalTok{(}\BuiltInTok{len}\NormalTok{(frequencies\_GHz))}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+Qubit 0 has an estimated frequency of 4.9716805437955225 GHz.
+The sweep will go from 4.961680543795523 GHz to 4.981680543795522 GHz in steps of 1.0 MHz.
+20
+\end{verbatim}
+
+\leavevmode\vadjust pre{\hypertarget{e5f59b59-c64c-4e3d-ac01-b36e452d40cd}{}}%
+We will create a pulse schedule by defining this frequency as a
+parameter using the parameter class. First, we will set the required
+values duration, sigma, and channel.
+
+Then we will set the pulse flow so that the specified pulses are
+executed sequentially. We will define the pulse frequency, the pulse
+used in the experiment, and the measurement pulse. Here, the pulse used
+in the experiment specifies the drive pulse, which is a Gaussian pulse.
+
+At each frequency, we will send a drive pulse of that frequency to the
+qubit and measure immediately after the pulse.
+
+\hypertarget{38518258-a0b8-4a6f-817b-38fe07f9f5db}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# samples need to be multiples of 16}
+\KeywordTok{def}\NormalTok{ get\_closest\_multiple\_of\_16(num):}
+    \ControlFlowTok{return} \BuiltInTok{int}\NormalTok{(num }\OperatorTok{+} \DecValTok{8}\NormalTok{ ) }\OperatorTok{{-}}\NormalTok{ (}\BuiltInTok{int}\NormalTok{(num }\OperatorTok{+} \DecValTok{8}\NormalTok{ ) }\OperatorTok{\%} \DecValTok{16}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{52261d49-5a56-41bb-bc4b-0b0c325b4cc2}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# Convert seconds to dt}
+\KeywordTok{def}\NormalTok{ get\_dt\_from(sec):}
+    \ControlFlowTok{return}\NormalTok{ get\_closest\_multiple\_of\_16(sec}\OperatorTok{/}\NormalTok{dt)}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{47dc8417-515a-4074-b7fe-a6d577e8f676}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\ImportTok{from}\NormalTok{ qiskit }\ImportTok{import}\NormalTok{ pulse                  }\CommentTok{\# This is where we access all of our Pulse features!}
+\ImportTok{from}\NormalTok{ qiskit.circuit }\ImportTok{import}\NormalTok{ Parameter      }\CommentTok{\# This is Parameter Class for variable parameters.}
+
+
+\CommentTok{\# Drive pulse parameters (us = microseconds)}
+\NormalTok{drive\_sigma\_sec }\OperatorTok{=} \FloatTok{0.015} \OperatorTok{*}\NormalTok{ us }\OperatorTok{*}\DecValTok{4}                         \CommentTok{\# This determines the actual width of the gaussian}
+\NormalTok{drive\_duration\_sec }\OperatorTok{=}\NormalTok{ drive\_sigma\_sec }\OperatorTok{*} \DecValTok{8}                \CommentTok{\# This is a truncating parameter, because gaussians don\textquotesingle{}t have }
+                                                        \CommentTok{\# a natural finite length}
+\NormalTok{drive\_amp }\OperatorTok{=} \FloatTok{0.5}
+
+\NormalTok{frequencies\_Hz }\OperatorTok{=}\NormalTok{ frequencies\_GHz}\OperatorTok{*}\NormalTok{GHz}
+\CommentTok{\# Create the base schedule}
+\CommentTok{\# Start with drive pulse acting on the drive channel}
+\NormalTok{freq }\OperatorTok{=}\NormalTok{ Parameter(}\StringTok{\textquotesingle{}freq\textquotesingle{}}\NormalTok{)}
+\CommentTok{\#time = Parameter(\textquotesingle{}time\textquotesingle{})}
+\ControlFlowTok{with}\NormalTok{ pulse.build(backend}\OperatorTok{=}\NormalTok{backend, default\_alignment}\OperatorTok{=}\StringTok{\textquotesingle{}sequential\textquotesingle{}}\NormalTok{, name}\OperatorTok{=}\StringTok{\textquotesingle{}Frequency sweep\textquotesingle{}}\NormalTok{) }\ImportTok{as}\NormalTok{ sweep\_sched:}
+\NormalTok{    drive\_duration }\OperatorTok{=}\NormalTok{ get\_closest\_multiple\_of\_16(pulse.seconds\_to\_samples(drive\_duration\_sec))}
+\NormalTok{    drive\_sigma }\OperatorTok{=}\NormalTok{ pulse.seconds\_to\_samples(drive\_sigma\_sec)}
+\NormalTok{    drive\_chan }\OperatorTok{=}\NormalTok{ pulse.drive\_channel(qubit)}
+\NormalTok{    pulse.set\_frequency(freq, drive\_chan)}
+    \CommentTok{\# Drive pulse samples}
+    \BuiltInTok{print}\NormalTok{(drive\_sigma)}
+\NormalTok{    pulse.play(pulse.Gaussian(duration}\OperatorTok{=}\NormalTok{drive\_duration,}
+\NormalTok{                              sigma}\OperatorTok{=}\NormalTok{drive\_sigma,}
+\NormalTok{                              amp}\OperatorTok{=}\NormalTok{drive\_amp,}
+\NormalTok{                              name}\OperatorTok{=}\StringTok{\textquotesingle{}freq\_sweep\_excitation\_pulse\textquotesingle{}}\NormalTok{), drive\_chan)}
+    \CommentTok{\# Define our measurement pulse}
+\NormalTok{    pulse.measure(qubits}\OperatorTok{=}\NormalTok{[qubit], registers}\OperatorTok{=}\NormalTok{[pulse.MemorySlot(mem\_slot)])}
+        
+
+\CommentTok{\# Create the frequency settings for the sweep (MUST BE IN HZ)}
+
+\NormalTok{times}\OperatorTok{=}\NormalTok{ [}\DecValTok{1}\NormalTok{,}\DecValTok{2}\NormalTok{,}\DecValTok{3}\NormalTok{,}\DecValTok{4}\NormalTok{,}\DecValTok{5}\NormalTok{]}
+\NormalTok{schedules }\OperatorTok{=}\NormalTok{ [sweep\_sched.assign\_parameters(\{freq: f\}, inplace}\OperatorTok{=}\VariableTok{False}\NormalTok{) }\ControlFlowTok{for}\NormalTok{ f }\KeywordTok{in}\NormalTok{ frequencies\_Hz]}
+\BuiltInTok{print}\NormalTok{(times)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+270
+[1, 2, 3, 4, 5]
+\end{verbatim}
+
+\leavevmode\vadjust pre{\hypertarget{2f62ab23-9324-4bc7-b925-d7ae5afac43c}{}}%
+As a sanity check, it's always a good idea to look at the pulse
+schedule. This is done using \texttt{schedule.draw()} as shown below.
+
+\hypertarget{40689979-3fa6-46b6-a7fd-b16b77dec2e7}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{schedules[}\DecValTok{0}\NormalTok{].draw(backend}\OperatorTok{=}\NormalTok{backend)}
+\NormalTok{schedules[}\DecValTok{5}\NormalTok{].draw(backend}\OperatorTok{=}\NormalTok{backend)}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{4970572ab007753a76d5051c43bcb926db605088.png}
+
+\leavevmode\vadjust pre{\hypertarget{b69cbea2-f4e3-47ae-bc87-ec0b9fa5fba4}{}}%
+We request that each schedule (each point in our frequency sweep) is
+repeated \texttt{num\_shots\_per\_frequency} times in order to get a
+good estimate of the qubit response.
+
+We also specify measurement settings. \texttt{meas\_level=0} returns raw
+data (an array of complex values per shot), \texttt{meas\_level=1}
+returns kerneled data (one complex value per shot), and
+\texttt{meas\_level=2} returns classified data (a 0 or 1 bit per shot).
+We choose \texttt{meas\_level=1} to replicate what we would be working
+with if we were in the lab, and hadn't yet calibrated the discriminator
+to classify 0s and 1s. We ask for the
+\texttt{\textquotesingle{}avg\textquotesingle{}} of the results, rather
+than each shot individually.
+
+\leavevmode\vadjust pre{\hypertarget{37da8053-0d55-4383-8c6b-db2110828733}{}}%
+You may see yet another unit change warning, we can safely ignore this.
+Finally, we can run the assembled program on the backend using:
+
+\hypertarget{ed65f46e-f38e-47ee-b973-d2f110666583}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{num\_shots\_per\_frequency }\OperatorTok{=} \DecValTok{1024}
+
+\NormalTok{job }\OperatorTok{=}\NormalTok{ backend.run(schedules, }
+\NormalTok{                  meas\_level}\OperatorTok{=}\DecValTok{1}\NormalTok{, }
+\NormalTok{                  meas\_return}\OperatorTok{=}\StringTok{\textquotesingle{}avg\textquotesingle{}}\NormalTok{, }
+\NormalTok{                  shots}\OperatorTok{=}\NormalTok{num\_shots\_per\_frequency)}
+\end{Highlighting}
+\end{Shaded}
+
+\leavevmode\vadjust pre{\hypertarget{2702f65a-834d-40b4-b9cf-0c3aa641cfce}{}}%
+It is always a good idea to monitor the job status by using
+\texttt{job\_monitor()}
+
+\hypertarget{4f1aa3f2-59f1-403d-9742-42897deb0deb}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\ImportTok{from}\NormalTok{ qiskit.tools.monitor }\ImportTok{import}\NormalTok{ job\_monitor}
+\NormalTok{job\_monitor(job)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+Job Status: job has successfully run
+\end{verbatim}
+
+\leavevmode\vadjust pre{\hypertarget{2b3f4ce9-e991-4b35-81dc-03a620a07776}{}}%
+Once the job is run, the results can be retrieved using:
+
+\hypertarget{6350f277-6624-4758-8df3-13b6cea23cad}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{frequency\_sweep\_results}\OperatorTok{=}\NormalTok{ job.result(timeout}\OperatorTok{=}\DecValTok{120}\NormalTok{) }\CommentTok{\# timeout parameter set to 120 second}
+\end{Highlighting}
+\end{Shaded}
+
+\leavevmode\vadjust pre{\hypertarget{89d06bbb-6a4e-4da6-ad8f-b6bb73724fc0}{}}%
+We will extract the results and plot them using \texttt{matplotlib}:
+
+\hypertarget{48cdd8c7-6fc2-4774-99ee-71b370de0ab0}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\ImportTok{import}\NormalTok{ matplotlib.pyplot }\ImportTok{as}\NormalTok{ plt}
+
+\NormalTok{sweep\_values }\OperatorTok{=}\NormalTok{ []}
+\ControlFlowTok{for}\NormalTok{ i }\KeywordTok{in} \BuiltInTok{range}\NormalTok{(}\BuiltInTok{len}\NormalTok{(frequency\_sweep\_results.results)):}
+    \CommentTok{\# Get the results from the ith experiment}
+\NormalTok{    res }\OperatorTok{=}\NormalTok{ frequency\_sweep\_results.get\_memory(i)}\OperatorTok{*}\NormalTok{scale\_factor}
+    \CommentTok{\# Get the results for \textasciigrave{}qubit\textasciigrave{} from this experiment}
+\NormalTok{    sweep\_values.append(res[qubit])}
+    \ControlFlowTok{if}\NormalTok{ (i}\OperatorTok{\%}\DecValTok{4}\OperatorTok{==}\DecValTok{0}\NormalTok{): }\BuiltInTok{print}\NormalTok{((frequency\_sweep\_results.get\_memory(i)}\OperatorTok{*}\NormalTok{scale\_factor)[}\DecValTok{0}\NormalTok{])}
+
+\NormalTok{plt.scatter(frequencies\_GHz, np.real(sweep\_values), color}\OperatorTok{=}\StringTok{\textquotesingle{}black\textquotesingle{}}\NormalTok{) }\CommentTok{\# plot real part of sweep values}
+\NormalTok{plt.xlim([}\BuiltInTok{min}\NormalTok{(frequencies\_GHz), }\BuiltInTok{max}\NormalTok{(frequencies\_GHz)])}
+\NormalTok{plt.xlabel(}\StringTok{"Frequency [GHz]"}\NormalTok{)}
+\NormalTok{plt.ylabel(}\StringTok{"Measured signal [a.u.]"}\NormalTok{)}
+\NormalTok{plt.show()}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+(-1.25892672094208-1.211957361246208j)
+(-1.233851225473024-1.228896443826176j)
+(-0.961655525605376-1.467631395667968j)
+(-0.960599836065792-1.453804553764864j)
+(-1.232183033331712-1.222821078368256j)
+\end{verbatim}
+
+\includegraphics{6187b313f603fcfb265ec92615122cb8a37ecef3.png}
+
+\leavevmode\vadjust pre{\hypertarget{b0bcfde0-e83b-4d41-a8d7-9d56dce568e0}{}}%
+As you can see above, the peak near the center corresponds to the
+location of the qubit frequency. The signal shows power-broadening,
+which is a signature that we are able to drive the qubit off-resonance
+as we get close to the center frequency. To get the value of the peak
+frequency, we will fit the values to a resonance response curve, which
+is typically a Lorentzian shape.
+
+\hypertarget{2f0ad1be-c269-4b57-b278-554fc5f351f4}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\ImportTok{from}\NormalTok{ scipy.optimize }\ImportTok{import}\NormalTok{ curve\_fit}
+
+\KeywordTok{def}\NormalTok{ fit\_function(x\_values, y\_values, function, init\_params):}
+\NormalTok{    fitparams, conv }\OperatorTok{=}\NormalTok{ curve\_fit(function, x\_values, y\_values, init\_params)}
+\NormalTok{    y\_fit }\OperatorTok{=}\NormalTok{ function(x\_values, }\OperatorTok{*}\NormalTok{fitparams)}
+    \ControlFlowTok{return}\NormalTok{ fitparams, y\_fit}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{7e7e85aa-bff3-473c-aa4e-70dae30f1af1}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{fit\_params, y\_fit }\OperatorTok{=}\NormalTok{ fit\_function(frequencies\_GHz,}
+\NormalTok{                                 np.real(sweep\_values), }
+                                 \KeywordTok{lambda}\NormalTok{ x, A, q\_freq, B, C: ((A}\OperatorTok{/}\NormalTok{np.pi)}\OperatorTok{*}\NormalTok{(B}\OperatorTok{/}\NormalTok{ ((x}\OperatorTok{{-}}\NormalTok{q\_freq)}\OperatorTok{**}\DecValTok{2}\OperatorTok{+}\NormalTok{B}\OperatorTok{**}\DecValTok{2}\NormalTok{))}\OperatorTok{+}\NormalTok{C),}
+\NormalTok{                                 [}\FloatTok{0.003}\NormalTok{, }\FloatTok{4.9723}\NormalTok{, }\FloatTok{0.003}\NormalTok{,}\OperatorTok{{-}}\FloatTok{1.25}\NormalTok{] }\CommentTok{\# initial parameters for curve\_fit}
+\NormalTok{                                )}
+\NormalTok{plt.scatter(frequencies\_GHz, np.real(sweep\_values), color}\OperatorTok{=}\StringTok{\textquotesingle{}black\textquotesingle{}}\NormalTok{)}
+\NormalTok{plt.plot(frequencies\_GHz, y\_fit, color}\OperatorTok{=}\StringTok{\textquotesingle{}red\textquotesingle{}}\NormalTok{)}
+\NormalTok{plt.xlim([}\BuiltInTok{min}\NormalTok{(frequencies\_GHz), }\BuiltInTok{max}\NormalTok{(frequencies\_GHz)])}
+
+\NormalTok{plt.xlabel(}\StringTok{"Frequency [GHz]"}\NormalTok{)}
+\NormalTok{plt.ylabel(}\StringTok{"Measured Signal [a.u.]"}\NormalTok{)}
+\NormalTok{plt.show()}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{24dcb0cc9171a5f1bfd83676ae339798128228b5.png}
+
+\hypertarget{27e60bc3-cbc9-47cb-8b16-249429e6683e}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{A, rough\_qubit\_frequency, B, C }\OperatorTok{=}\NormalTok{ fit\_params}
+\NormalTok{rough\_qubit\_frequency }\OperatorTok{=}\NormalTok{ rough\_qubit\_frequency}\OperatorTok{*}\NormalTok{GHz }\CommentTok{\# make sure qubit freq is in Hz}
+\BuiltInTok{print}\NormalTok{(}\SpecialStringTok{f"We\textquotesingle{}ve updated our qubit frequency estimate from "}
+      \SpecialStringTok{f"}\SpecialCharTok{\{}\BuiltInTok{round}\NormalTok{(backend\_defaults.qubit\_freq\_est[qubit] }\OperatorTok{/}\NormalTok{ GHz, }\DecValTok{5}\NormalTok{)}\SpecialCharTok{\}}\SpecialStringTok{ GHz to }\SpecialCharTok{\{}\BuiltInTok{round}\NormalTok{(rough\_qubit\_frequency}\OperatorTok{/}\NormalTok{GHz, }\DecValTok{5}\NormalTok{)}\SpecialCharTok{\}}\SpecialStringTok{ GHz."}\NormalTok{)}
+\CommentTok{\#print(fit\_params)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+We've updated our qubit frequency estimate from 4.97168 GHz to 4.97174 GHz.
+\end{verbatim}
+
+\hypertarget{e324ac92-bb33-4a86-b14a-919fae7eec4b}{}
+\hypertarget{using-rabi-to-calibrate-the-pi-pulse-for-0---1}{%
+\section{\texorpdfstring{Using Rabi to Calibrate the \(\pi\) Pulse for
+\textbar0\textgreater{} -\textgreater{}
+\textbar1\textgreater{}}{Using Rabi to Calibrate the \textbackslash pi Pulse for \textbar0\textgreater{} -\textgreater{} \textbar1\textgreater{}}}\label{using-rabi-to-calibrate-the-pi-pulse-for-0---1}}
+
+\hypertarget{8346b765-b22b-47eb-b9ea-30ce7e54986a}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# This experiment uses these values from the previous experiment:}
+    \CommentTok{\# \textasciigrave{}qubit\textasciigrave{},}
+    \CommentTok{\# \textasciigrave{}mem\_slot\textasciigrave{}, and}
+    \CommentTok{\# \textasciigrave{}rough\_qubit\_frequency\textasciigrave{}.}
+
+\CommentTok{\# Rabi experiment parameters}
+\NormalTok{num\_rabi\_points }\OperatorTok{=} \DecValTok{50}
+
+\CommentTok{\# Drive amplitude values to iterate over: 50 amplitudes evenly spaced from 0 to 0.75}
+\NormalTok{drive\_amp\_min }\OperatorTok{=} \OperatorTok{{-}}\DecValTok{1}
+\NormalTok{drive\_amp\_max }\OperatorTok{=} \DecValTok{1}
+\NormalTok{drive\_amps }\OperatorTok{=}\NormalTok{ np.linspace(drive\_amp\_min, drive\_amp\_max, num\_rabi\_points)}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{ef28af9e-5a1a-4e78-b4fa-e882ed9afaf1}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# Build the Rabi experiments:}
+\CommentTok{\#    A drive pulse at the qubit frequency, followed by a measurement,}
+\CommentTok{\#    where we vary the drive amplitude each time.}
+
+\NormalTok{drive\_amp }\OperatorTok{=}\NormalTok{ Parameter(}\StringTok{\textquotesingle{}drive\_amp\textquotesingle{}}\NormalTok{)}
+\ControlFlowTok{with}\NormalTok{ pulse.build(backend}\OperatorTok{=}\NormalTok{backend, default\_alignment}\OperatorTok{=}\StringTok{\textquotesingle{}sequential\textquotesingle{}}\NormalTok{, name}\OperatorTok{=}\StringTok{\textquotesingle{}Rabi Experiment\textquotesingle{}}\NormalTok{) }\ImportTok{as}\NormalTok{ rabi\_sched:}
+\NormalTok{    drive\_duration }\OperatorTok{=}\NormalTok{ get\_closest\_multiple\_of\_16(pulse.seconds\_to\_samples(drive\_duration\_sec))}
+\NormalTok{    drive\_sigma }\OperatorTok{=}\NormalTok{ pulse.seconds\_to\_samples(drive\_sigma\_sec)}
+\NormalTok{    drive\_chan }\OperatorTok{=}\NormalTok{ pulse.drive\_channel(qubit)}
+\NormalTok{    pulse.set\_frequency(rough\_qubit\_frequency, drive\_chan)}
+\NormalTok{    pulse.play(pulse.Gaussian(duration}\OperatorTok{=}\NormalTok{drive\_duration,}
+\NormalTok{                              amp}\OperatorTok{=}\NormalTok{drive\_amp,}
+\NormalTok{                              sigma}\OperatorTok{=}\NormalTok{drive\_sigma,}
+\NormalTok{                              name}\OperatorTok{=}\StringTok{\textquotesingle{}Rabi Pulse\textquotesingle{}}\NormalTok{), drive\_chan)}
+\NormalTok{    pulse.measure(qubits}\OperatorTok{=}\NormalTok{[qubit], registers}\OperatorTok{=}\NormalTok{[pulse.MemorySlot(mem\_slot)])}
+
+\NormalTok{rabi\_schedules }\OperatorTok{=}\NormalTok{ [rabi\_sched.assign\_parameters(\{drive\_amp: a\}, inplace}\OperatorTok{=}\VariableTok{False}\NormalTok{) }\ControlFlowTok{for}\NormalTok{ a }\KeywordTok{in}\NormalTok{ drive\_amps]}
+\end{Highlighting}
+\end{Shaded}
+
+\leavevmode\vadjust pre{\hypertarget{2c04bf7a-afe0-4c09-81ed-381b64e8aaaf}{}}%
+The schedule will look essentially the same as the frequency sweep
+experiment. The only difference is that we are running a set of
+experiments which vary the amplitude of the drive pulse, rather than its
+modulation frequency.
+
+\hypertarget{03cdd9a4-f3c3-44af-a07a-6b7133e20b09}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{rabi\_schedules[}\DecValTok{3}\NormalTok{].draw(backend}\OperatorTok{=}\NormalTok{backend)}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{22a6e553ff023f018d3794258648d0348dbcba91.png}
+
+\hypertarget{be62f139-c5cb-4592-9767-4768e145dd3f}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{num\_shots\_per\_point }\OperatorTok{=} \DecValTok{1024}
+
+\NormalTok{job }\OperatorTok{=}\NormalTok{ backend.run(rabi\_schedules, }
+\NormalTok{                  meas\_level}\OperatorTok{=}\DecValTok{1}\NormalTok{, }
+\NormalTok{                  meas\_return}\OperatorTok{=}\StringTok{\textquotesingle{}avg\textquotesingle{}}\NormalTok{, }
+\NormalTok{                  shots}\OperatorTok{=}\NormalTok{num\_shots\_per\_point)}
+
+\NormalTok{job\_monitor(job)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+Job Status: job has successfully run
+\end{verbatim}
+
+\hypertarget{88c2d2be-f3c7-4ccc-b06e-0394779a9d66}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{rabi\_results }\OperatorTok{=}\NormalTok{ job.result(timeout}\OperatorTok{=}\DecValTok{120}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\leavevmode\vadjust pre{\hypertarget{7d732f65-2284-4faa-9124-0853c99bf493}{}}%
+Now that we have our results, we will extract them and fit them to a
+sinusoidal curve. For the range of drive amplitudes we selected, we
+expect that we will rotate the qubit several times completely around the
+Bloch sphere, starting from \(|0\rangle\). The amplitude of this
+sinusoid tells us the fraction of the shots at that Rabi drive amplitude
+which yielded the \(|1\rangle\) state. We want to find the drive
+amplitude needed for the signal to oscillate from a maximum (all
+\(|0\rangle\) state) to a minimum (all \(|1\rangle\) state) -\/- this
+gives the calibrated amplitude that enacts a \(\pi\) pulse.
+
+\hypertarget{dc6dccd4-19af-4414-93bd-631427907bc6}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# center data around 0}
+\KeywordTok{def}\NormalTok{ baseline\_remove(values):}
+    \ControlFlowTok{return}\NormalTok{ np.array(values) }\OperatorTok{{-}}\NormalTok{ np.mean(values)}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{339c9822-8bfd-49bf-8c2d-edef22b5b90c}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{rabi\_values }\OperatorTok{=}\NormalTok{ []}
+\ControlFlowTok{for}\NormalTok{ i }\KeywordTok{in} \BuiltInTok{range}\NormalTok{(num\_rabi\_points):}
+    \CommentTok{\# Get the results for \textasciigrave{}qubit\textasciigrave{} from the ith experiment}
+\NormalTok{    rabi\_values.append(rabi\_results.get\_memory(i)[qubit] }\OperatorTok{*}\NormalTok{ scale\_factor)}
+
+\NormalTok{rabi\_values }\OperatorTok{=}\NormalTok{ np.real(baseline\_remove(rabi\_values))}
+
+\NormalTok{plt.xlabel(}\StringTok{"Drive amp [a.u.]"}\NormalTok{)}
+\NormalTok{plt.ylabel(}\StringTok{"Measured signal [a.u.]"}\NormalTok{)}
+\NormalTok{plt.scatter(drive\_amps, rabi\_values, color}\OperatorTok{=}\StringTok{\textquotesingle{}black\textquotesingle{}}\NormalTok{) }\CommentTok{\# plot real part of Rabi values}
+\NormalTok{plt.show()}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{35ec097a0ffaf476676eb0b8f065969d0426efae.png}
+
+\hypertarget{f98a67bc-bff6-44d9-a3ff-c1bab43c429f}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{fit\_params, y\_fit }\OperatorTok{=}\NormalTok{ fit\_function(drive\_amps,}
+\NormalTok{                                 rabi\_values, }
+                                 \KeywordTok{lambda}\NormalTok{ x, A, B, drive\_period, phi: (A}\OperatorTok{*}\NormalTok{np.cos(}\DecValTok{2}\OperatorTok{*}\NormalTok{np.pi}\OperatorTok{*}\NormalTok{x}\OperatorTok{/}\NormalTok{drive\_period }\OperatorTok{{-}}\NormalTok{ phi) }\OperatorTok{+}\NormalTok{ B),}
+\NormalTok{                                 [}\FloatTok{0.2}\NormalTok{, }\DecValTok{0}\NormalTok{, }\FloatTok{0.4}\NormalTok{, np.pi}\OperatorTok{/}\DecValTok{2}\NormalTok{])}
+
+\NormalTok{plt.scatter(drive\_amps, rabi\_values, color}\OperatorTok{=}\StringTok{\textquotesingle{}black\textquotesingle{}}\NormalTok{)}
+\NormalTok{plt.plot(drive\_amps, y\_fit, color}\OperatorTok{=}\StringTok{\textquotesingle{}red\textquotesingle{}}\NormalTok{)}
+\BuiltInTok{print}\NormalTok{(fit\_params)}
+\NormalTok{drive\_period }\OperatorTok{=}\NormalTok{ fit\_params[}\DecValTok{2}\NormalTok{] }\CommentTok{\# get period of rabi oscillation}
+
+\NormalTok{plt.axvline(}\DecValTok{0}\NormalTok{, color}\OperatorTok{=}\StringTok{\textquotesingle{}red\textquotesingle{}}\NormalTok{, linestyle}\OperatorTok{=}\StringTok{\textquotesingle{}{-}{-}\textquotesingle{}}\NormalTok{)}
+\NormalTok{plt.axvline(drive\_period}\OperatorTok{/}\DecValTok{2}\NormalTok{, color}\OperatorTok{=}\StringTok{\textquotesingle{}red\textquotesingle{}}\NormalTok{, linestyle}\OperatorTok{=}\StringTok{\textquotesingle{}{-}{-}\textquotesingle{}}\NormalTok{)}
+\NormalTok{plt.annotate(}\StringTok{""}\NormalTok{, xy}\OperatorTok{=}\NormalTok{(}\DecValTok{0}\NormalTok{, }\DecValTok{0}\NormalTok{), xytext}\OperatorTok{=}\NormalTok{(drive\_period}\OperatorTok{/}\DecValTok{2}\NormalTok{,}\DecValTok{0}\NormalTok{), arrowprops}\OperatorTok{=}\BuiltInTok{dict}\NormalTok{(arrowstyle}\OperatorTok{=}\StringTok{"\textless{}{-}\textgreater{}"}\NormalTok{, color}\OperatorTok{=}\StringTok{\textquotesingle{}red\textquotesingle{}}\NormalTok{))}
+\NormalTok{plt.annotate(}\StringTok{"$\textbackslash{}pi$"}\NormalTok{, xy}\OperatorTok{=}\NormalTok{(drive\_period}\OperatorTok{/}\DecValTok{2}\OperatorTok{{-}}\FloatTok{0.03}\NormalTok{, }\FloatTok{0.1}\NormalTok{), color}\OperatorTok{=}\StringTok{\textquotesingle{}red\textquotesingle{}}\NormalTok{)}
+
+\NormalTok{plt.xlabel(}\StringTok{"Drive amp [a.u.]"}\NormalTok{, fontsize}\OperatorTok{=}\DecValTok{15}\NormalTok{)}
+\NormalTok{plt.ylabel(}\StringTok{"Measured signal [a.u.]"}\NormalTok{, fontsize}\OperatorTok{=}\DecValTok{15}\NormalTok{)}
+\NormalTok{plt.show()}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+[ 0.22467697 -0.01074188  0.38619543  3.1538365 ]
+\end{verbatim}
+
+\includegraphics{e8ac546faebf5cdb69d184f66d927b92685c4251.png}
+
+\hypertarget{096f5118-d5f5-45c5-8841-261af97ab9b7}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{pi\_amp }\OperatorTok{=} \BuiltInTok{abs}\NormalTok{(drive\_period }\OperatorTok{/} \DecValTok{2}\NormalTok{)}
+\BuiltInTok{print}\NormalTok{(}\SpecialStringTok{f"Pi Amplitude = }\SpecialCharTok{\{}\NormalTok{pi\_amp}\SpecialCharTok{\}}\SpecialStringTok{"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+Pi Amplitude = 0.19309771515336357
+\end{verbatim}
+
+\hypertarget{8ecf2349-58a1-4390-a8cb-0616b221c41f}{}
+\hypertarget{our-pi-pulse}{%
+\subsubsection{\texorpdfstring{Our \(\pi\)
+pulse!}{Our \textbackslash pi pulse!}}\label{our-pi-pulse}}
+
+Let's define our pulse, with the amplitude we just found, so we can use
+it in later experiments.
+
+\hypertarget{ef7d0882-174c-4462-8d00-efb23910c081}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\ControlFlowTok{with}\NormalTok{ pulse.build(backend) }\ImportTok{as}\NormalTok{ pi\_pulse\_0\_1:}
+\NormalTok{    drive\_duration }\OperatorTok{=}\NormalTok{ get\_closest\_multiple\_of\_16(pulse.seconds\_to\_samples(drive\_duration\_sec))}
+\NormalTok{    drive\_sigma }\OperatorTok{=}\NormalTok{ pulse.seconds\_to\_samples(drive\_sigma\_sec)}
+\NormalTok{    drive\_chan }\OperatorTok{=}\NormalTok{ pulse.drive\_channel(qubit)}
+\NormalTok{    pulse.play(pulse.Gaussian(duration}\OperatorTok{=}\NormalTok{drive\_duration,}
+\NormalTok{                              amp}\OperatorTok{=}\NormalTok{pi\_amp,}
+\NormalTok{                              sigma}\OperatorTok{=}\NormalTok{drive\_sigma,}
+\NormalTok{                              name}\OperatorTok{=}\StringTok{\textquotesingle{}pi\_pulse\textquotesingle{}}\NormalTok{), drive\_chan)}
+\NormalTok{pi\_pulse\_0\_1.draw(backend}\OperatorTok{=}\NormalTok{backend)}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{f37d255ba5902c4df2078518f3a41ad1d4cceaa2.png}
+
+\hypertarget{3e360688-2184-4587-8098-cd39b505140b}{}
+\hypertarget{initial-freq-1-2}{%
+\section{Initial Freq 1-\textgreater2}\label{initial-freq-1-2}}
+
+\hypertarget{483582f2-0e4c-4577-9bf4-c2e9625bbe27}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# We will sweep 40 MHz around the estimated frequency}
+\NormalTok{frequency\_span\_Hz }\OperatorTok{=} \DecValTok{40} \OperatorTok{*}\NormalTok{ MHz}
+\CommentTok{\# in steps of 1 MHz.}
+\NormalTok{frequency\_step\_Hz }\OperatorTok{=} \DecValTok{1} \OperatorTok{*}\NormalTok{ MHz}
+\NormalTok{a}\OperatorTok{={-}}\FloatTok{0.35}
+\CommentTok{\# We will sweep 20 MHz above and 20 MHz below the estimated frequency}
+\NormalTok{frequency\_min }\OperatorTok{=}\NormalTok{ (center\_frequency\_Hz }\OperatorTok{{-}}\NormalTok{ frequency\_span\_Hz }\OperatorTok{/} \DecValTok{2}\NormalTok{)}\OperatorTok{+}\NormalTok{a}\OperatorTok{*}\NormalTok{GHz}
+\NormalTok{frequency\_max }\OperatorTok{=}\NormalTok{ (center\_frequency\_Hz }\OperatorTok{+}\NormalTok{ frequency\_span\_Hz }\OperatorTok{/} \DecValTok{2}\NormalTok{)}\OperatorTok{+}\NormalTok{a}\OperatorTok{*}\NormalTok{GHz}
+\CommentTok{\# Construct an np array of the frequencies for our experiment}
+\NormalTok{frequencies\_GHz }\OperatorTok{=}\NormalTok{ np.arange((frequency\_min }\OperatorTok{/}\NormalTok{ GHz), }
+\NormalTok{                            (frequency\_max }\OperatorTok{/}\NormalTok{ GHz), }
+\NormalTok{                            frequency\_step\_Hz }\OperatorTok{/}\NormalTok{ GHz)}
+
+\BuiltInTok{print}\NormalTok{(}\SpecialStringTok{f"The sweep will go from }\SpecialCharTok{\{}\NormalTok{frequency\_min }\OperatorTok{/}\NormalTok{ GHz}\SpecialCharTok{\}}\SpecialStringTok{ GHz to }\SpecialCharTok{\{}\NormalTok{frequency\_max }\OperatorTok{/}\NormalTok{ GHz}\SpecialCharTok{\}}\SpecialStringTok{ GHz }\CharTok{\textbackslash{}}
+\SpecialStringTok{in steps of }\SpecialCharTok{\{}\NormalTok{frequency\_step\_Hz }\OperatorTok{/}\NormalTok{ MHz}\SpecialCharTok{\}}\SpecialStringTok{ MHz."}\NormalTok{)}
+\BuiltInTok{print}\NormalTok{(}\BuiltInTok{len}\NormalTok{(frequencies\_GHz))}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+The sweep will go from 4.601680543795522 GHz to 4.641680543795522 GHz in steps of 1.0 MHz.
+41
+\end{verbatim}
+
+\hypertarget{d26b1955-4c0c-4188-93a8-186baf4ffac1}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\ImportTok{from}\NormalTok{ qiskit }\ImportTok{import}\NormalTok{ pulse                  }\CommentTok{\# This is where we access all of our Pulse features!}
+\ImportTok{from}\NormalTok{ qiskit.circuit }\ImportTok{import}\NormalTok{ Parameter      }\CommentTok{\# This is Parameter Class for variable parameters.}
+
+\CommentTok{\# Drive pulse parameters (us = microseconds)}
+\NormalTok{drive\_sigma\_sec }\OperatorTok{=} \FloatTok{0.015} \OperatorTok{*}\NormalTok{ us                      }\CommentTok{\# This determines the actual width of the gaussian}
+\NormalTok{drive\_duration\_sec }\OperatorTok{=}\NormalTok{ drive\_sigma\_sec }\OperatorTok{*} \DecValTok{8}                \CommentTok{\# This is a truncating parameter, because gaussians don\textquotesingle{}t have }
+                                                        \CommentTok{\# a natural finite length}
+\NormalTok{drive\_amp }\OperatorTok{=} \FloatTok{0.7}
+
+\NormalTok{frequencies\_Hz }\OperatorTok{=}\NormalTok{ frequencies\_GHz}\OperatorTok{*}\NormalTok{GHz}
+\CommentTok{\# Create the base schedule}
+\CommentTok{\# Start with drive pulse acting on the drive channel}
+\NormalTok{freq }\OperatorTok{=}\NormalTok{ Parameter(}\StringTok{\textquotesingle{}freq\textquotesingle{}}\NormalTok{)}
+\ControlFlowTok{with}\NormalTok{ pulse.build(backend}\OperatorTok{=}\NormalTok{backend, default\_alignment}\OperatorTok{=}\StringTok{\textquotesingle{}sequential\textquotesingle{}}\NormalTok{, name}\OperatorTok{=}\StringTok{\textquotesingle{}Frequency sweep\textquotesingle{}}\NormalTok{) }\ImportTok{as}\NormalTok{ sweep\_sched:}
+\NormalTok{    drive\_duration }\OperatorTok{=}\NormalTok{ get\_closest\_multiple\_of\_16(pulse.seconds\_to\_samples(drive\_duration\_sec))}
+\NormalTok{    drive\_sigma }\OperatorTok{=}\NormalTok{ pulse.seconds\_to\_samples(drive\_sigma\_sec)}
+\NormalTok{    drive\_chan }\OperatorTok{=}\NormalTok{ pulse.drive\_channel(qubit)}
+\NormalTok{    pulse.set\_frequency(rough\_qubit\_frequency, drive\_chan)}
+\NormalTok{    pulse.call(pi\_pulse\_0\_1)}
+\NormalTok{    pulse.set\_frequency(freq, drive\_chan)}
+    \CommentTok{\# Drive pulse samples}
+    \CommentTok{\#pulse.play(pulse.library.Constant(drive\_duration, drive\_amp), drive\_chan)}
+\NormalTok{    pulse.play(pulse.Gaussian(duration}\OperatorTok{=}\NormalTok{drive\_duration,sigma}\OperatorTok{=}\NormalTok{drive\_sigma,amp}\OperatorTok{=}\NormalTok{drive\_amp,name}\OperatorTok{=}\StringTok{\textquotesingle{}freq\_sweep\_excitation\_pulse\textquotesingle{}}\NormalTok{), drive\_chan)}
+    \CommentTok{\# Define our measurement pulse}
+\NormalTok{    pulse.measure(qubits}\OperatorTok{=}\NormalTok{[qubit], registers}\OperatorTok{=}\NormalTok{[pulse.MemorySlot(mem\_slot)])}
+        
+
+\CommentTok{\# Create the frequency settings for the sweep (MUST BE IN HZ)}
+\NormalTok{schedules }\OperatorTok{=}\NormalTok{ [sweep\_sched.assign\_parameters(\{freq: f\}, inplace}\OperatorTok{=}\VariableTok{False}\NormalTok{) }\ControlFlowTok{for}\NormalTok{ f }\KeywordTok{in}\NormalTok{ frequencies\_Hz]}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{1ca39cea-2a80-4b33-b814-e755e74e77e8}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{schedules[}\DecValTok{0}\NormalTok{].draw(backend}\OperatorTok{=}\NormalTok{backend)}
+\NormalTok{sweep\_sched.draw(backend}\OperatorTok{=}\NormalTok{backend)}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{397366dd59023f374551c1de3a09d307473fffd0.png}
+
+\hypertarget{87f87c2f-8895-4a71-afe0-85b668282e0e}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{num\_shots\_per\_frequency }\OperatorTok{=} \DecValTok{1024}
+\NormalTok{job }\OperatorTok{=}\NormalTok{ backend.run(schedules, }
+\NormalTok{                  meas\_level}\OperatorTok{=}\DecValTok{1}\NormalTok{, }
+\NormalTok{                  meas\_return}\OperatorTok{=}\StringTok{\textquotesingle{}avg\textquotesingle{}}\NormalTok{, }
+\NormalTok{                  shots}\OperatorTok{=}\NormalTok{num\_shots\_per\_frequency)}
+\NormalTok{job\_monitor(job)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+Job Status: job has successfully run
+\end{verbatim}
+
+\hypertarget{10af25c8-7496-4d88-98a9-2c42457df3ca}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{frequency\_sweep\_results}\OperatorTok{=}\NormalTok{ job.result(timeout}\OperatorTok{=}\DecValTok{120}\NormalTok{) }\CommentTok{\# timeout parameter set to 120 second}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{6c76be86-89b7-43c2-b70c-c8a243c2cf2c}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\ImportTok{import}\NormalTok{ matplotlib.pyplot }\ImportTok{as}\NormalTok{ plt}
+
+\NormalTok{sweep\_values }\OperatorTok{=}\NormalTok{ []}
+\ControlFlowTok{for}\NormalTok{ i }\KeywordTok{in} \BuiltInTok{range}\NormalTok{(}\BuiltInTok{len}\NormalTok{(frequency\_sweep\_results.results)):}
+    \CommentTok{\# Get the results from the ith experiment}
+\NormalTok{    res }\OperatorTok{=}\NormalTok{ frequency\_sweep\_results.get\_memory(i)}\OperatorTok{*}\NormalTok{scale\_factor}
+    \CommentTok{\# Get the results for \textasciigrave{}qubit\textasciigrave{} from this experiment}
+\NormalTok{    sweep\_values.append(res[qubit])}
+    \CommentTok{\#if (i\%4==0): print((frequency\_sweep\_results.get\_memory(i)*scale\_factor)[0])}
+
+\NormalTok{plt.scatter(frequencies\_GHz, np.real(sweep\_values), color}\OperatorTok{=}\StringTok{\textquotesingle{}black\textquotesingle{}}\NormalTok{) }\CommentTok{\# plot real part of sweep values}
+\NormalTok{plt.xlim([}\BuiltInTok{min}\NormalTok{(frequencies\_GHz), }\BuiltInTok{max}\NormalTok{(frequencies\_GHz)])}
+\NormalTok{plt.xlabel(}\StringTok{"Frequency [GHz]"}\NormalTok{)}
+\NormalTok{plt.ylabel(}\StringTok{"Measured signal [a.u.]"}\NormalTok{)}
+\NormalTok{plt.show()}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{90875f143deae12f4f0ba35d7bcacc882d428e38.png}
+
+\hypertarget{e02e3234-6713-4669-af17-075c85c2cca4}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{fit\_params, y\_fit }\OperatorTok{=}\NormalTok{ fit\_function(frequencies\_GHz,}
+\NormalTok{                                 np.real(sweep\_values), }
+                                 \KeywordTok{lambda}\NormalTok{ x, A, q\_freq, B, C: ((A}\OperatorTok{/}\NormalTok{np.pi)}\OperatorTok{*}\NormalTok{(B}\OperatorTok{/}\NormalTok{ ((x}\OperatorTok{{-}}\NormalTok{q\_freq)}\OperatorTok{**}\DecValTok{2}\OperatorTok{+}\NormalTok{B}\OperatorTok{**}\DecValTok{2}\NormalTok{))}\OperatorTok{+}\NormalTok{C),}
+\NormalTok{                                 [}\FloatTok{0.003}\NormalTok{, }\FloatTok{4.62}\NormalTok{, }\FloatTok{0.003}\NormalTok{,}\OperatorTok{{-}}\FloatTok{1.2}\NormalTok{] }\CommentTok{\# initial parameters for curve\_fit}
+\NormalTok{                                )}
+\NormalTok{plt.scatter(frequencies\_GHz, np.real(sweep\_values), color}\OperatorTok{=}\StringTok{\textquotesingle{}black\textquotesingle{}}\NormalTok{)}
+\NormalTok{plt.plot(frequencies\_GHz, y\_fit, color}\OperatorTok{=}\StringTok{\textquotesingle{}red\textquotesingle{}}\NormalTok{)}
+\NormalTok{plt.xlim([}\BuiltInTok{min}\NormalTok{(frequencies\_GHz), }\BuiltInTok{max}\NormalTok{(frequencies\_GHz)])}
+
+\NormalTok{plt.xlabel(}\StringTok{"Frequency [GHz]"}\NormalTok{)}
+\NormalTok{plt.ylabel(}\StringTok{"Measured Signal [a.u.]"}\NormalTok{)}
+\NormalTok{plt.show()}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{dfc6a7c1ed20c2ce87f5840cd7944b43a5e1e014.png}
+
+\hypertarget{b4801155-c44f-453e-b968-d0fb205685ca}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{A, rough\_qubit\_frequency\_2, B, C }\OperatorTok{=}\NormalTok{ fit\_params}
+\NormalTok{rough\_qubit\_frequency\_2 }\OperatorTok{=}\NormalTok{ rough\_qubit\_frequency\_2}\OperatorTok{*}\NormalTok{GHz }\CommentTok{\# make sure qubit freq is in Hz}
+\BuiltInTok{print}\NormalTok{(}\SpecialStringTok{f"We\textquotesingle{}ve updated our qubit frequency estimate from "}
+      \SpecialStringTok{f"}\SpecialCharTok{\{}\BuiltInTok{round}\NormalTok{(backend\_defaults.qubit\_freq\_est[qubit] }\OperatorTok{/}\NormalTok{ GHz, }\DecValTok{5}\NormalTok{)}\SpecialCharTok{\}}\SpecialStringTok{ GHz to }\SpecialCharTok{\{}\BuiltInTok{round}\NormalTok{(rough\_qubit\_frequency\_2}\OperatorTok{/}\NormalTok{GHz, }\DecValTok{5}\NormalTok{)}\SpecialCharTok{\}}\SpecialStringTok{ GHz."}\NormalTok{)}
+\CommentTok{\#print(fit\_params)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+We've updated our qubit frequency estimate from 4.97168 GHz to 4.62324 GHz.
+\end{verbatim}
+
+\hypertarget{6e765aa4-4d58-4e8b-a3a3-0cc03a02d309}{}
+\hypertarget{using-rabi-to-calibrate-the-pi-pulse-for-1---2-}{%
+\section{\texorpdfstring{Using Rabi to Calibrate the \(\pi\) Pulse for
+\textbar1\textgreater{} -\textgreater{} \textbar2\textgreater{}
+}{Using Rabi to Calibrate the \textbackslash pi Pulse for \textbar1\textgreater{} -\textgreater{} \textbar2\textgreater{} }}\label{using-rabi-to-calibrate-the-pi-pulse-for-1---2-}}
+
+\hypertarget{calibrating-pi-pulses-using-a-rabi-experiment-}{%
+\subsubsection{\texorpdfstring{Calibrating \(\pi\) Pulses using a Rabi
+Experiment
+}{Calibrating \textbackslash pi Pulses using a Rabi Experiment }}\label{calibrating-pi-pulses-using-a-rabi-experiment-}}
+
+Once we know the frequency of our qubit, the next step is to determine
+the strength of a \(\pi\) pulse. Strictly speaking of the qubit as a
+two-level system, a \(\pi\) pulse is one that takes the qubit from
+\(\vert0\rangle\) to \(\vert1\rangle\), and vice versa. This is also
+called the \(X\) or \(X180\) gate, or bit-flip operator. We already know
+the microwave frequency needed to drive this transition from the
+previous frequency sweep experiment, and we now seek the amplitude
+needed to achieve a \(\pi\) rotation from \(\vert0\rangle\) to
+\(\vert1\rangle\). The desired rotation is shown on the Bloch sphere in
+the figure below -\/- you can see that the \(\pi\) pulse gets its name
+from the angle it sweeps over on a Bloch sphere.
+
+\hypertarget{d0409108-e9b8-4218-9f97-8534a142740b}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# Build the Rabi experiments:}
+\CommentTok{\#    A drive pulse at the qubit frequency, followed by a measurement,}
+\CommentTok{\#    where we vary the drive amplitude each time.}
+
+\NormalTok{drive\_amp }\OperatorTok{=}\NormalTok{ Parameter(}\StringTok{\textquotesingle{}drive\_amp\textquotesingle{}}\NormalTok{)}
+\ControlFlowTok{with}\NormalTok{ pulse.build(backend}\OperatorTok{=}\NormalTok{backend, default\_alignment}\OperatorTok{=}\StringTok{\textquotesingle{}sequential\textquotesingle{}}\NormalTok{, name}\OperatorTok{=}\StringTok{\textquotesingle{}Rabi Experiment\textquotesingle{}}\NormalTok{) }\ImportTok{as}\NormalTok{ rabi\_sched\_2:}
+\NormalTok{    drive\_duration }\OperatorTok{=}\NormalTok{ get\_closest\_multiple\_of\_16(pulse.seconds\_to\_samples(drive\_duration\_sec}\OperatorTok{*}\DecValTok{2}\NormalTok{))}
+\NormalTok{    drive\_sigma }\OperatorTok{=}\NormalTok{ pulse.seconds\_to\_samples(drive\_sigma\_sec}\OperatorTok{*}\DecValTok{2}\NormalTok{)}
+\NormalTok{    drive\_chan }\OperatorTok{=}\NormalTok{ pulse.drive\_channel(qubit)}
+\NormalTok{    pulse.set\_frequency(rough\_qubit\_frequency, drive\_chan)}
+\NormalTok{    pulse.call(pi\_pulse\_0\_1)}
+\NormalTok{    pulse.set\_frequency(rough\_qubit\_frequency\_2, drive\_chan)}
+\NormalTok{    pulse.play(pulse.Gaussian(duration}\OperatorTok{=}\NormalTok{drive\_duration,amp}\OperatorTok{=}\NormalTok{drive\_amp,sigma}\OperatorTok{=}\NormalTok{drive\_sigma,name}\OperatorTok{=}\StringTok{\textquotesingle{}Rabi Pulse\textquotesingle{}}\NormalTok{), drive\_chan)}
+\NormalTok{    pulse.measure(qubits}\OperatorTok{=}\NormalTok{[qubit], registers}\OperatorTok{=}\NormalTok{[pulse.MemorySlot(mem\_slot)])}
+
+\NormalTok{rabi\_schedules\_2 }\OperatorTok{=}\NormalTok{ [rabi\_sched\_2.assign\_parameters(\{drive\_amp: a\}, inplace}\OperatorTok{=}\VariableTok{False}\NormalTok{) }\ControlFlowTok{for}\NormalTok{ a }\KeywordTok{in}\NormalTok{ drive\_amps]}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{7d7c966d-076a-4b3b-b003-73ec0f6584e8}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{rabi\_schedules\_2[}\DecValTok{2}\NormalTok{].draw(backend}\OperatorTok{=}\NormalTok{backend)}
+\NormalTok{rabi\_sched\_2.draw(backend}\OperatorTok{=}\NormalTok{backend)}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{ad3df40ed24ac43a7f7f53c316d582e3277cdd40.png}
+
+\hypertarget{2e6ca967-ac35-4416-81e8-4f05fe167c81}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{num\_shots\_per\_point }\OperatorTok{=} \DecValTok{2000}
+
+\NormalTok{job }\OperatorTok{=}\NormalTok{ backend.run(rabi\_schedules\_2, }
+\NormalTok{                  meas\_level}\OperatorTok{=}\DecValTok{1}\NormalTok{, }
+\NormalTok{                  meas\_return}\OperatorTok{=}\StringTok{\textquotesingle{}avg\textquotesingle{}}\NormalTok{, }
+\NormalTok{                  shots}\OperatorTok{=}\NormalTok{num\_shots\_per\_point)}
+
+\NormalTok{job\_monitor(job)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+Job Status: job has successfully run
+\end{verbatim}
+
+\hypertarget{01730ef4-fcfe-4e9d-ba3b-84b3ed84091a}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{rabi\_results }\OperatorTok{=}\NormalTok{ job.result(timeout}\OperatorTok{=}\DecValTok{120}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{13271f34-bf07-435c-a84f-e7805adfb0a7}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{rabi\_values }\OperatorTok{=}\NormalTok{ []}
+\ControlFlowTok{for}\NormalTok{ i }\KeywordTok{in} \BuiltInTok{range}\NormalTok{(num\_rabi\_points):}
+    \CommentTok{\# Get the results for \textasciigrave{}qubit\textasciigrave{} from the ith experiment}
+\NormalTok{    rabi\_values.append(rabi\_results.get\_memory(i)[qubit] }\OperatorTok{*}\NormalTok{ scale\_factor)}
+
+\NormalTok{rabi\_values }\OperatorTok{=}\NormalTok{ np.real(baseline\_remove(rabi\_values))}
+
+\NormalTok{plt.xlabel(}\StringTok{"Drive amp [a.u.]"}\NormalTok{)}
+\NormalTok{plt.ylabel(}\StringTok{"Measured signal [a.u.]"}\NormalTok{)}
+\NormalTok{plt.scatter(drive\_amps, rabi\_values, color}\OperatorTok{=}\StringTok{\textquotesingle{}black\textquotesingle{}}\NormalTok{) }\CommentTok{\# plot real part of Rabi values}
+\NormalTok{plt.show()}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{5943de6d64ba39d9b53f54dc2c12d8af4799c881.png}
+
+\hypertarget{89ec61b4-4220-41fc-af6e-59f59f784009}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{fit\_params, y\_fit }\OperatorTok{=}\NormalTok{ fit\_function(drive\_amps,}
+\NormalTok{                                 rabi\_values, }
+                                 \KeywordTok{lambda}\NormalTok{ x, A, B, drive\_period, phi: (A}\OperatorTok{*}\NormalTok{np.cos(}\DecValTok{2}\OperatorTok{*}\NormalTok{np.pi}\OperatorTok{*}\NormalTok{x}\OperatorTok{/}\NormalTok{drive\_period }\OperatorTok{{-}}\NormalTok{ phi) }\OperatorTok{+}\NormalTok{ B),}
+\NormalTok{                                 [}\FloatTok{0.2}\NormalTok{, }\OperatorTok{{-}}\FloatTok{0.2}\NormalTok{, }\FloatTok{0.75}\NormalTok{, np.pi}\OperatorTok{/}\DecValTok{2}\NormalTok{])}
+
+\NormalTok{plt.scatter(drive\_amps, rabi\_values, color}\OperatorTok{=}\StringTok{\textquotesingle{}black\textquotesingle{}}\NormalTok{)}
+\NormalTok{plt.plot(drive\_amps, y\_fit, color}\OperatorTok{=}\StringTok{\textquotesingle{}red\textquotesingle{}}\NormalTok{)}
+\BuiltInTok{print}\NormalTok{(fit\_params)}
+\NormalTok{drive\_period\_2 }\OperatorTok{=}\NormalTok{ fit\_params[}\DecValTok{2}\NormalTok{] }\CommentTok{\# get period of rabi oscillation}
+
+\NormalTok{plt.axvline(drive\_period\_2}\OperatorTok{/}\DecValTok{2}\NormalTok{, color}\OperatorTok{=}\StringTok{\textquotesingle{}red\textquotesingle{}}\NormalTok{, linestyle}\OperatorTok{=}\StringTok{\textquotesingle{}{-}{-}\textquotesingle{}}\NormalTok{)}
+\NormalTok{plt.axvline(drive\_period\_2, color}\OperatorTok{=}\StringTok{\textquotesingle{}red\textquotesingle{}}\NormalTok{, linestyle}\OperatorTok{=}\StringTok{\textquotesingle{}{-}{-}\textquotesingle{}}\NormalTok{)}
+\NormalTok{plt.annotate(}\StringTok{""}\NormalTok{, xy}\OperatorTok{=}\NormalTok{(drive\_period\_2, }\DecValTok{0}\NormalTok{), xytext}\OperatorTok{=}\NormalTok{(drive\_period}\OperatorTok{/}\DecValTok{2}\NormalTok{,}\DecValTok{0}\NormalTok{), arrowprops}\OperatorTok{=}\BuiltInTok{dict}\NormalTok{(arrowstyle}\OperatorTok{=}\StringTok{"\textless{}{-}\textgreater{}"}\NormalTok{, color}\OperatorTok{=}\StringTok{\textquotesingle{}red\textquotesingle{}}\NormalTok{))}
+\NormalTok{plt.annotate(}\StringTok{"$\textbackslash{}pi$"}\NormalTok{, xy}\OperatorTok{=}\NormalTok{(drive\_period\_2}\OperatorTok{/}\DecValTok{2}\OperatorTok{{-}}\FloatTok{0.03}\NormalTok{, }\FloatTok{0.1}\NormalTok{), color}\OperatorTok{=}\StringTok{\textquotesingle{}red\textquotesingle{}}\NormalTok{)}
+
+\NormalTok{plt.xlabel(}\StringTok{"Drive amp [a.u.]"}\NormalTok{, fontsize}\OperatorTok{=}\DecValTok{15}\NormalTok{)}
+\NormalTok{plt.ylabel(}\StringTok{"Measured signal [a.u.]"}\NormalTok{, fontsize}\OperatorTok{=}\DecValTok{15}\NormalTok{)}
+\NormalTok{plt.show()}
+
+\NormalTok{pi\_amp\_2 }\OperatorTok{=} \BuiltInTok{abs}\NormalTok{(drive\_period\_2 }\OperatorTok{/} \DecValTok{2}\NormalTok{)}
+\BuiltInTok{print}\NormalTok{(}\SpecialStringTok{f"Pi Amplitude = }\SpecialCharTok{\{}\NormalTok{pi\_amp\_2}\SpecialCharTok{\}}\SpecialStringTok{"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+[0.04806702 0.00375785 0.73842967 3.10003536]
+\end{verbatim}
+
+\includegraphics{bc69d0822f4bf123bade05abc5c1e4a6402ba06b.png}
+
+\begin{verbatim}
+Pi Amplitude = 0.3692148371978982
+\end{verbatim}
+
+\hypertarget{2690bc89-ed3f-4803-a628-7ca3a5a45569}{}
+\hypertarget{our-1---2-pi-pulse}{%
+\subsubsection{\texorpdfstring{Our \textbar1\textgreater{}
+-\textgreater{} \textbar2\textgreater{} \(\pi\)
+pulse!}{Our \textbar1\textgreater{} -\textgreater{} \textbar2\textgreater{} \textbackslash pi pulse!}}\label{our-1---2-pi-pulse}}
+
+Let's define our pulse, with the amplitude we just found, so we can use
+it in later experiments.
+
+\hypertarget{152b6d6c-24f1-43df-be9b-05d093007719}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\ControlFlowTok{with}\NormalTok{ pulse.build(backend) }\ImportTok{as}\NormalTok{ pi\_pulse\_0\_2:}
+\NormalTok{    drive\_duration }\OperatorTok{=}\NormalTok{ get\_closest\_multiple\_of\_16(pulse.seconds\_to\_samples(drive\_duration\_sec}\OperatorTok{*}\DecValTok{2}\NormalTok{))}
+\NormalTok{    drive\_sigma }\OperatorTok{=}\NormalTok{ pulse.seconds\_to\_samples(drive\_sigma\_sec}\OperatorTok{*}\DecValTok{2}\NormalTok{)}
+\NormalTok{    drive\_chan }\OperatorTok{=}\NormalTok{ pulse.drive\_channel(qubit)}
+\NormalTok{    pulse.play(pulse.Gaussian(duration}\OperatorTok{=}\NormalTok{drive\_duration,}
+\NormalTok{                              amp}\OperatorTok{=}\NormalTok{pi\_amp\_2,}
+\NormalTok{                              sigma}\OperatorTok{=}\NormalTok{drive\_sigma,}
+\NormalTok{                              name}\OperatorTok{=}\StringTok{\textquotesingle{}pi\_pulse\_1{-}\textgreater{}2\textquotesingle{}}\NormalTok{), drive\_chan)}
+\NormalTok{pi\_pulse\_0\_2.draw(backend}\OperatorTok{=}\NormalTok{backend)}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{702452c971506411334f6c003581601693a592b2.png}
+
+\hypertarget{8519faaf-8459-4741-840a-c4a96a5ccc99}{}
+\hypertarget{determining-0-vs-1-vs-2-}{%
+\section{\texorpdfstring{Determining 0 vs 1 vs 2
+}{Determining 0 vs 1 vs 2 }}\label{determining-0-vs-1-vs-2-}}
+
+\leavevmode\vadjust pre{\hypertarget{91182d96-f00a-49a2-bff3-e2826a62b8c0}{}}%
+Once our \(\pi\) pulses have been calibrated, we can now create the
+state \(\vert1\rangle\) with good probability. We can use this to find
+out what the states \(\vert0\rangle\) and \(\vert1\rangle\) look like in
+our measurements, by repeatedly preparing them and plotting the measured
+signal. This is what we use to build a discriminator, which is simply a
+function which takes a measured and kerneled complex value
+(\texttt{meas\_level=1}) and classifies it as a 0 or a 1
+(\texttt{meas\_level=2}).
+
+\hypertarget{0c33f2ee-a9cb-4257-9c88-c9f74edbc15b}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# Create two schedules}
+
+\CommentTok{\# Ground state schedule}
+\ControlFlowTok{with}\NormalTok{ pulse.build(backend}\OperatorTok{=}\NormalTok{backend, default\_alignment}\OperatorTok{=}\StringTok{\textquotesingle{}sequential\textquotesingle{}}\NormalTok{, name}\OperatorTok{=}\StringTok{\textquotesingle{}ground state\textquotesingle{}}\NormalTok{) }\ImportTok{as}\NormalTok{ gnd\_schedule:}
+\NormalTok{    drive\_chan }\OperatorTok{=}\NormalTok{ pulse.drive\_channel(qubit)}
+\NormalTok{    pulse.set\_frequency(rough\_qubit\_frequency, drive\_chan)}
+\NormalTok{    pulse.measure(qubits}\OperatorTok{=}\NormalTok{[qubit], registers}\OperatorTok{=}\NormalTok{[pulse.MemorySlot(mem\_slot)])}
+
+
+\CommentTok{\# Excited state schedule}
+\ControlFlowTok{with}\NormalTok{ pulse.build(backend}\OperatorTok{=}\NormalTok{backend, default\_alignment}\OperatorTok{=}\StringTok{\textquotesingle{}sequential\textquotesingle{}}\NormalTok{, name}\OperatorTok{=}\StringTok{\textquotesingle{}excited state\textquotesingle{}}\NormalTok{) }\ImportTok{as}\NormalTok{ exc\_1\_schedule:}
+\NormalTok{    drive\_chan }\OperatorTok{=}\NormalTok{ pulse.drive\_channel(qubit)}
+\NormalTok{    pulse.set\_frequency(rough\_qubit\_frequency, drive\_chan)}
+\NormalTok{    pulse.call(pi\_pulse\_0\_1)}
+\NormalTok{    pulse.measure(qubits}\OperatorTok{=}\NormalTok{[qubit], registers}\OperatorTok{=}\NormalTok{[pulse.MemorySlot(mem\_slot)])}
+    
+\ControlFlowTok{with}\NormalTok{ pulse.build(backend}\OperatorTok{=}\NormalTok{backend, default\_alignment}\OperatorTok{=}\StringTok{\textquotesingle{}sequential\textquotesingle{}}\NormalTok{, name}\OperatorTok{=}\StringTok{\textquotesingle{}excited state\textquotesingle{}}\NormalTok{) }\ImportTok{as}\NormalTok{ exc\_2\_schedule:}
+\NormalTok{    drive\_chan }\OperatorTok{=}\NormalTok{ pulse.drive\_channel(qubit)}
+\NormalTok{    pulse.set\_frequency(rough\_qubit\_frequency, drive\_chan)}
+\NormalTok{    pulse.call(pi\_pulse\_0\_1)}
+\NormalTok{    pulse.set\_frequency(rough\_qubit\_frequency\_2, drive\_chan)}
+\NormalTok{    pulse.call(pi\_pulse\_0\_2)}
+\NormalTok{    pulse.measure(qubits}\OperatorTok{=}\NormalTok{[qubit], registers}\OperatorTok{=}\NormalTok{[pulse.MemorySlot(mem\_slot)])}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{4aac5b01-78a6-454c-ac14-15c2fd9c1bf8}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{gnd\_schedule.draw(backend}\OperatorTok{=}\NormalTok{backend)}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{4d276a8e79ba1370100e39864a937723116a6ed1.png}
+
+\hypertarget{13189420-2bd5-4ebb-a2b1-eecda68f8410}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{exc\_1\_schedule.draw(backend}\OperatorTok{=}\NormalTok{backend)}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{11037ad312f719040f866c2c369139da68591ed4.png}
+
+\hypertarget{3d8a05ab-3dac-46b0-ad9a-f528a4c7ab84}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{exc\_2\_schedule.draw(backend}\OperatorTok{=}\NormalTok{backend)}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{35dcf5a5e7284e1ac0be9ebafa1ee13df297eb91.png}
+
+\leavevmode\vadjust pre{\hypertarget{7256ce34-2dba-4186-8016-0416ac19c7dd}{}}%
+We assemble the ground and excited state preparation schedules. Each of
+these will run \texttt{num\_shots} times. We choose
+\texttt{meas\_level=1} this time, because we do not want the results
+already classified for us as \(|0\rangle\) or \(|1\rangle\). Instead, we
+want kerneled data: raw acquired data that has gone through a kernel
+function to yield a single complex value for each shot. (You can think
+of a kernel as a dot product applied to the raw measurement data.)
+
+\hypertarget{9ddcb126-e885-411a-99df-eb1e65cfb8b8}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# Execution settings}
+\NormalTok{num\_shots }\OperatorTok{=} \DecValTok{1024}
+
+\NormalTok{job }\OperatorTok{=}\NormalTok{ backend.run([gnd\_schedule, exc\_1\_schedule, exc\_2\_schedule], }
+\NormalTok{                  meas\_level}\OperatorTok{=}\DecValTok{1}\NormalTok{, }
+\NormalTok{                  meas\_return}\OperatorTok{=}\StringTok{\textquotesingle{}single\textquotesingle{}}\NormalTok{, }
+\NormalTok{                  shots}\OperatorTok{=}\NormalTok{num\_shots)}
+
+\NormalTok{job\_monitor(job)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+Job Status: job has successfully run
+\end{verbatim}
+
+\hypertarget{823c030a-3335-4818-986b-9159523b885d}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{gnd\_exc\_results }\OperatorTok{=}\NormalTok{ job.result(timeout}\OperatorTok{=}\DecValTok{120}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\leavevmode\vadjust pre{\hypertarget{1bc4f47c-6a9a-4380-b9b3-8555b22121a9}{}}%
+Now that we have the results, we can visualize the two populations which
+we have prepared on a simple scatter plot, showing results from the
+ground state program in blue and results from the excited state
+preparation program in red. Note: If the populations irregularly shaped
+(not approximately circular), try re-running the notebook.
+
+\hypertarget{efb2485c-6374-4015-8230-49a5e9ca27e4}{}
+\hypertarget{0-and-1-discrimination}{%
+\subsection{\textbar0\textgreater{} and \textbar1\textgreater{}
+Discrimination}\label{0-and-1-discrimination}}
+
+\hypertarget{5abe36be-5884-4104-85d2-efc9625b4d82}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{gnd\_results }\OperatorTok{=}\NormalTok{ gnd\_exc\_results.get\_memory(}\DecValTok{0}\NormalTok{)[:, qubit]}\OperatorTok{*}\NormalTok{scale\_factor}
+\NormalTok{exc\_1\_results }\OperatorTok{=}\NormalTok{ gnd\_exc\_results.get\_memory(}\DecValTok{1}\NormalTok{)[:, qubit]}\OperatorTok{*}\NormalTok{scale\_factor}
+\NormalTok{plt.figure()}
+
+\CommentTok{\# Plot all the results}
+\CommentTok{\# All results from the gnd\_schedule are plotted in blue}
+\NormalTok{plt.scatter(np.real(gnd\_results), np.imag(gnd\_results), }
+\NormalTok{                s}\OperatorTok{=}\DecValTok{5}\NormalTok{, cmap}\OperatorTok{=}\StringTok{\textquotesingle{}viridis\textquotesingle{}}\NormalTok{, c}\OperatorTok{=}\StringTok{\textquotesingle{}blue\textquotesingle{}}\NormalTok{, alpha}\OperatorTok{=}\FloatTok{0.5}\NormalTok{, label}\OperatorTok{=}\StringTok{\textquotesingle{}state\_0\textquotesingle{}}\NormalTok{)}
+\CommentTok{\# All results from the exc\_schedule are plotted in red}
+\NormalTok{plt.scatter(np.real(exc\_1\_results), np.imag(exc\_1\_results), }
+\NormalTok{                s}\OperatorTok{=}\DecValTok{5}\NormalTok{, cmap}\OperatorTok{=}\StringTok{\textquotesingle{}viridis\textquotesingle{}}\NormalTok{, c}\OperatorTok{=}\StringTok{\textquotesingle{}red\textquotesingle{}}\NormalTok{, alpha}\OperatorTok{=}\FloatTok{0.5}\NormalTok{, label}\OperatorTok{=}\StringTok{\textquotesingle{}state\_1\textquotesingle{}}\NormalTok{)}
+
+\NormalTok{plt.axis(}\StringTok{\textquotesingle{}square\textquotesingle{}}\NormalTok{)}
+
+\CommentTok{\# Plot a large dot for the average result of the 0 and 1 states.}
+\NormalTok{mean\_gnd }\OperatorTok{=}\NormalTok{ np.mean(gnd\_results) }\CommentTok{\# takes mean of both real and imaginary parts}
+\NormalTok{mean\_1\_exc }\OperatorTok{=}\NormalTok{ np.mean(exc\_1\_results)}
+\NormalTok{plt.scatter(np.real(mean\_gnd), np.imag(mean\_gnd), }
+\NormalTok{            s}\OperatorTok{=}\DecValTok{200}\NormalTok{, cmap}\OperatorTok{=}\StringTok{\textquotesingle{}viridis\textquotesingle{}}\NormalTok{, c}\OperatorTok{=}\StringTok{\textquotesingle{}black\textquotesingle{}}\NormalTok{,alpha}\OperatorTok{=}\FloatTok{1.0}\NormalTok{, label}\OperatorTok{=}\StringTok{\textquotesingle{}state\_0\_mean\textquotesingle{}}\NormalTok{)}
+\NormalTok{plt.scatter(np.real(mean\_1\_exc), np.imag(mean\_1\_exc), }
+\NormalTok{            s}\OperatorTok{=}\DecValTok{200}\NormalTok{, cmap}\OperatorTok{=}\StringTok{\textquotesingle{}viridis\textquotesingle{}}\NormalTok{, c}\OperatorTok{=}\StringTok{\textquotesingle{}black\textquotesingle{}}\NormalTok{,alpha}\OperatorTok{=}\FloatTok{1.0}\NormalTok{, label}\OperatorTok{=}\StringTok{\textquotesingle{}state\_1\_mean\textquotesingle{}}\NormalTok{)}
+
+\NormalTok{plt.ylabel(}\StringTok{\textquotesingle{}I [a.u.]\textquotesingle{}}\NormalTok{, fontsize}\OperatorTok{=}\DecValTok{15}\NormalTok{)}
+\NormalTok{plt.xlabel(}\StringTok{\textquotesingle{}Q [a.u.]\textquotesingle{}}\NormalTok{, fontsize}\OperatorTok{=}\DecValTok{15}\NormalTok{)}
+\NormalTok{plt.title(}\StringTok{"0{-}1 discrimination"}\NormalTok{, fontsize}\OperatorTok{=}\DecValTok{15}\NormalTok{)}
+
+\NormalTok{plt.show()}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{562210eb779f62ada709af584769b0b70e0cd73c.png}
+
+\hypertarget{23270964-b117-457f-8926-023ab76782d1}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{exc\_2\_results }\OperatorTok{=}\NormalTok{ gnd\_exc\_results.get\_memory(}\DecValTok{2}\NormalTok{)[:, qubit]}\OperatorTok{*}\NormalTok{scale\_factor}
+\NormalTok{plt.figure()}
+
+\CommentTok{\# Plot all the results}
+\CommentTok{\# All results from the gnd\_schedule are plotted in blue}
+\NormalTok{plt.scatter(np.real(gnd\_results), np.imag(gnd\_results), }
+\NormalTok{                s}\OperatorTok{=}\DecValTok{5}\NormalTok{, cmap}\OperatorTok{=}\StringTok{\textquotesingle{}viridis\textquotesingle{}}\NormalTok{, c}\OperatorTok{=}\StringTok{\textquotesingle{}blue\textquotesingle{}}\NormalTok{, alpha}\OperatorTok{=}\FloatTok{0.5}\NormalTok{, label}\OperatorTok{=}\StringTok{\textquotesingle{}state\_0\textquotesingle{}}\NormalTok{)}
+\CommentTok{\# All results from the exc\_schedule are plotted in red}
+\NormalTok{plt.scatter(np.real(exc\_1\_results), np.imag(exc\_1\_results), }
+\NormalTok{                s}\OperatorTok{=}\DecValTok{5}\NormalTok{, cmap}\OperatorTok{=}\StringTok{\textquotesingle{}viridis\textquotesingle{}}\NormalTok{, c}\OperatorTok{=}\StringTok{\textquotesingle{}red\textquotesingle{}}\NormalTok{, alpha}\OperatorTok{=}\FloatTok{0.5}\NormalTok{, label}\OperatorTok{=}\StringTok{\textquotesingle{}state\_1\textquotesingle{}}\NormalTok{)}
+\NormalTok{plt.scatter(np.real(exc\_2\_results), np.imag(exc\_2\_results), }
+\NormalTok{                s}\OperatorTok{=}\DecValTok{5}\NormalTok{, cmap}\OperatorTok{=}\StringTok{\textquotesingle{}viridis\textquotesingle{}}\NormalTok{, c}\OperatorTok{=}\StringTok{\textquotesingle{}green\textquotesingle{}}\NormalTok{, alpha}\OperatorTok{=}\FloatTok{0.5}\NormalTok{, label}\OperatorTok{=}\StringTok{\textquotesingle{}state\_2\textquotesingle{}}\NormalTok{)}
+\NormalTok{plt.axis(}\StringTok{\textquotesingle{}square\textquotesingle{}}\NormalTok{)}
+
+\CommentTok{\# Plot a large dot for the average result of the 0 and 1 states.}
+\NormalTok{mean\_gnd }\OperatorTok{=}\NormalTok{ np.mean(gnd\_results) }\CommentTok{\# takes mean of both real and imaginary parts}
+\NormalTok{mean\_1\_exc }\OperatorTok{=}\NormalTok{ np.mean(exc\_1\_results)}
+\NormalTok{mean\_2\_exc }\OperatorTok{=}\NormalTok{ np.mean(exc\_2\_results)}
+\NormalTok{plt.scatter(np.real(mean\_gnd), np.imag(mean\_gnd), }
+\NormalTok{            s}\OperatorTok{=}\DecValTok{200}\NormalTok{, cmap}\OperatorTok{=}\StringTok{\textquotesingle{}viridis\textquotesingle{}}\NormalTok{, c}\OperatorTok{=}\StringTok{\textquotesingle{}black\textquotesingle{}}\NormalTok{,alpha}\OperatorTok{=}\FloatTok{1.0}\NormalTok{, label}\OperatorTok{=}\StringTok{\textquotesingle{}state\_0\_mean\textquotesingle{}}\NormalTok{)}
+\NormalTok{plt.scatter(np.real(mean\_1\_exc), np.imag(mean\_1\_exc), }
+\NormalTok{            s}\OperatorTok{=}\DecValTok{200}\NormalTok{, cmap}\OperatorTok{=}\StringTok{\textquotesingle{}viridis\textquotesingle{}}\NormalTok{, c}\OperatorTok{=}\StringTok{\textquotesingle{}black\textquotesingle{}}\NormalTok{,alpha}\OperatorTok{=}\FloatTok{1.0}\NormalTok{, label}\OperatorTok{=}\StringTok{\textquotesingle{}state\_1\_mean\textquotesingle{}}\NormalTok{)}
+\NormalTok{plt.scatter(np.real(mean\_2\_exc), np.imag(mean\_2\_exc), }
+\NormalTok{            s}\OperatorTok{=}\DecValTok{200}\NormalTok{, cmap}\OperatorTok{=}\StringTok{\textquotesingle{}viridis\textquotesingle{}}\NormalTok{, c}\OperatorTok{=}\StringTok{\textquotesingle{}black\textquotesingle{}}\NormalTok{,alpha}\OperatorTok{=}\FloatTok{1.0}\NormalTok{, label}\OperatorTok{=}\StringTok{\textquotesingle{}state\_1\_mean\textquotesingle{}}\NormalTok{)}
+
+\NormalTok{plt.ylabel(}\StringTok{\textquotesingle{}I [a.u.]\textquotesingle{}}\NormalTok{, fontsize}\OperatorTok{=}\DecValTok{15}\NormalTok{)}
+\NormalTok{plt.xlabel(}\StringTok{\textquotesingle{}Q [a.u.]\textquotesingle{}}\NormalTok{, fontsize}\OperatorTok{=}\DecValTok{15}\NormalTok{)}
+\NormalTok{plt.title(}\StringTok{"0{-}1{-}2 Discrimination"}\NormalTok{, fontsize}\OperatorTok{=}\DecValTok{15}\NormalTok{)}
+
+\NormalTok{plt.show()}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{fe109f094eeff6eb26f781b56c5651bfb58f03a6.png}
+
+\hypertarget{c65fdc65-ada0-4418-921c-2c66cd502816}{}
+\begin{Shaded}
+\begin{Highlighting}[]
+
+\end{Highlighting}
+\end{Shaded}
