@@ -15,6 +15,7 @@ from qiskit.tools.visualization import plot_histogram
 from qiskit.visualization import plot_bloch_multivector
 from qiskit.providers.aer.pulse import PulseSystemModel
 from qiskit.providers.aer import PulseSimulator
+from qiskit.compiler import assemble
 warnings.filterwarnings('ignore')
 from qiskit.tools.jupyter import *
 
