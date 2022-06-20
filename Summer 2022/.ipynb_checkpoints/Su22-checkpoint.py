@@ -52,6 +52,16 @@ class Custom_Fgp:
             pulse.measure(qubits=[0], registers=[pulse.MemorySlot(0)])
         return custom_Pulse
     
+    def Customize_pulse_2(self,x,length):
+        temp = []
+        for i in self.norm:
+            for j in range(int(length)):
+                temp.append(i)
+        with pulse.build(backend=backend, default_alignment='sequential', name='Rabi Experiment') as custom_Pulse:
+            [pulse.play(temp*x, pulse.drive_channel(0))]
+            pulse.measure(qubits=[0], registers=[pulse.MemorySlot(0)])
+        return custom_Pulse
+    
     def draw(self):
         return self.Create_Pulse().draw(backend=self.backend)
     
@@ -106,6 +116,29 @@ class Custom_Fgp:
         rabi_values = np.real(self.baseline_remove(rabi_values))
 
         return drive_amps,rabi_values
+    
+    def Cali_l(self,len_max):
+        scale_factor = 1e-15
+        drive_len = np.linspace(1,len_max,len_max-1)
+
+        rabi_schedules = [self.Customize_pulse_2(1,a) for a in drive_len]
+        #return rabi_schedules
+        num_shots_per_point = 1024
+        job = backend.run(rabi_schedules, 
+                  meas_level=1, 
+                  meas_return='avg', 
+                  shots=num_shots_per_point)
+        job_monitor(job)
+        
+        rabi_results = job.result(timeout=120)
+        rabi_values = []
+        for i in range(len_max-1):
+            # Get the results for `qubit` from the ith experiment
+            rabi_values.append(rabi_results.get_memory(i)[0] * scale_factor)
+
+        rabi_values = np.real(self.baseline_remove(rabi_values))
+
+        return drive_len,rabi_values
     
     def rabi_test_Sim(self,num_rabi_points):
         scale_factor = 1e-15
