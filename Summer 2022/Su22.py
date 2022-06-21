@@ -16,6 +16,7 @@ from qiskit.visualization import plot_bloch_multivector
 from qiskit.providers.aer.pulse import PulseSystemModel
 from qiskit.providers.aer import PulseSimulator
 from qiskit.compiler import assemble
+from scipy.optimize import curve_fit
 warnings.filterwarnings('ignore')
 from qiskit.tools.jupyter import *
 
@@ -38,8 +39,13 @@ class Custom_Fgp:
         #self.norm = self.input/np.sqrt((self.input**2).sum())
         self.norm = self.input/self.input.max()
         self.par = Parameter('drive_amp')
-        self.pi_p = 1
-        
+        self.length = 1
+        self.pi_p = self.full_cal()
+
+    def fit_function(x_values, y_values, function, init_params):
+        fitparams, conv = curve_fit(function, x_values, y_values, init_params)
+        y_fit = function(x_values, *fitparams)
+        return fitparams, y_fit
 
     def Create_Pulse(self):
         with pulse.build(backend=backend, default_alignment='sequential', name='Rabi Experiment') as custom_Pulse:
@@ -98,7 +104,7 @@ class Custom_Fgp:
         drive_amp_max = 1
         drive_amps = np.linspace(drive_amp_min, drive_amp_max, num_rabi_points)
 
-        rabi_schedules = [self.Customize_pulse(a) for a in drive_amps]
+        rabi_schedules = [self.Customize_pulse_2(a,self.length) for a in drive_amps]
         #return rabi_schedules
         num_shots_per_point = 1024
         job = backend.run(rabi_schedules, 
@@ -114,6 +120,29 @@ class Custom_Fgp:
             rabi_values.append(rabi_results.get_memory(i)[0] * scale_factor)
 
         rabi_values = np.real(self.baseline_remove(rabi_values))
+
+        return drive_amps,rabi_values
+    
+    def full_cal(self):
+        scale_factor = 1e-15
+        num_rabi_points = 30
+        drive_amp_min = -1
+        drive_amp_max = 1
+        drive_amps = np.linspace(drive_amp_min, drive_amp_max, num_rabi_points)
+        pi_amp = 2
+        counter = 0
+        while pi_amp > 1:
+            counter+=1
+            if counter==100:
+                break
+            drive_amps,rabi_values = self.rabi_test_Sim(num_rabi_points,counter)
+            fit_params, y_fit = fit_function(drive_amps,
+                                 rabi_values, 
+                                 lambda x, A, B, drive_period, phi:(A*np.cos(2*np.pi*x/drive_period - phi) + B),
+                                 [-8, 1, 2, 0])
+            pi_amp = abs(drive_period / 2)
+        self.length = counter
+        drive_amps,rabi_values = signal.Cali(50)
 
         return drive_amps,rabi_values
     
@@ -139,14 +168,14 @@ class Custom_Fgp:
         rabi_values = np.real(self.baseline_remove(rabi_values))
 
         return drive_len,rabi_values
-    
-    def rabi_test_Sim(self,num_rabi_points):
+        
+    def rabi_test_Sim(self, num_rabi_points,length):
         scale_factor = 1e-15
         drive_amp_min = -1
         drive_amp_max = 1
         drive_amps = np.linspace(drive_amp_min, drive_amp_max, num_rabi_points)
 
-        rabi_schedules = [self.Customize_pulse(a) for a in drive_amps]
+        rabi_schedules = [self.Customize_pulse_2(a,length) for a in drive_amps]
         #return rabi_schedules
         num_shots_per_point = 1024
         armonk_model = PulseSystemModel.from_backend(self.backend)
