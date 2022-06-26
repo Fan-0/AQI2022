@@ -29,6 +29,11 @@ except:
 provider = IBMQ.get_provider(hub="ibm-q", group="open", project="main")
 backend = provider.get_backend("ibmq_armonk")## 
 
+def fit_function(x_values, y_values, function, init_params):
+    fitparams, conv = curve_fit(function, x_values, y_values, init_params)
+    y_fit = function(x_values, *fitparams)
+    return fitparams, y_fit
+    
 class Custom_Fgp:
     def __init__(self, name, inp,backend):
         self.name=name
@@ -40,16 +45,17 @@ class Custom_Fgp:
         self.norm = self.input/self.input.max()
         self.par = Parameter('drive_amp')
         self.length = 1
-        self.pi_p = self.full_cal()
-
-    def fit_function(x_values, y_values, function, init_params):
-        fitparams, conv = curve_fit(function, x_values, y_values, init_params)
-        y_fit = function(x_values, *fitparams)
-        return fitparams, y_fit
-
+        self.pi_p,plt = self.full_cal()
+    
+    #replaced using Customize_pulse_2)
     def Create_Pulse(self):
+        temp = []
+        for i in self.norm:
+            for j in range(int(self.length)):
+                temp.append(i)
+        temp = np.array(temp)
         with pulse.build(backend=backend, default_alignment='sequential', name='Rabi Experiment') as custom_Pulse:
-            [pulse.play(self.norm*self.pi_p, pulse.drive_channel(0))]
+            [pulse.play(temp*self.pi_p, pulse.drive_channel(0))]
         return custom_Pulse
     
     def Customize_pulse(self,x):
@@ -58,18 +64,19 @@ class Custom_Fgp:
             pulse.measure(qubits=[0], registers=[pulse.MemorySlot(0)])
         return custom_Pulse
     
-    def Customize_pulse_2(self,x,length):
+    def Customize_pulse_2(self, x, length):
         temp = []
         for i in self.norm:
             for j in range(int(length)):
                 temp.append(i)
+        temp = np.array(temp)
         with pulse.build(backend=backend, default_alignment='sequential', name='Rabi Experiment') as custom_Pulse:
             [pulse.play(temp*x, pulse.drive_channel(0))]
             pulse.measure(qubits=[0], registers=[pulse.MemorySlot(0)])
         return custom_Pulse
     
     def draw(self):
-        return self.Create_Pulse().draw(backend=self.backend)
+        return self.Create_Pulse_2(1,self.length).draw(backend=self.backend)
     
     def baseline_remove(self, values):
         return np.array(values) - np.mean(values)
@@ -125,13 +132,13 @@ class Custom_Fgp:
     
     def full_cal(self):
         scale_factor = 1e-15
-        num_rabi_points = 30
+        num_rabi_points = 10
         drive_amp_min = -1
         drive_amp_max = 1
         drive_amps = np.linspace(drive_amp_min, drive_amp_max, num_rabi_points)
         pi_amp = 2
         counter = 0
-        while pi_amp > 1:
+        while pi_amp > 0.9:
             counter+=1
             if counter==100:
                 break
@@ -140,11 +147,32 @@ class Custom_Fgp:
                                  rabi_values, 
                                  lambda x, A, B, drive_period, phi:(A*np.cos(2*np.pi*x/drive_period - phi) + B),
                                  [-8, 1, 2, 0])
+            drive_period = fit_params[2]
             pi_amp = abs(drive_period / 2)
+            print(counter, ": ", pi_amp)
         self.length = counter
-        drive_amps,rabi_values = signal.Cali(50)
+        drive_amps,rabi_values = self.Cali(50)
+        fit_params, y_fit = fit_function(drive_amps,
+                                 rabi_values, 
+                                 lambda x, A, B, drive_period, phi:(A*np.cos(2*np.pi*x/drive_period - phi) + B),
+                                 [-8, 1, 2, 0])
+        drive_period = fit_params[2]
+        pi_amp = abs(drive_period / 2)
+        plt.scatter(drive_amps, rabi_values, color='black')
+        plt.plot(drive_amps, y_fit, color='red')
+        print(fit_params)
+        drive_period = fit_params[2] # get period of rabi oscillation
 
-        return drive_amps,rabi_values
+        plt.axvline(0, color='red', linestyle='--')
+        plt.axvline(drive_period/2, color='red', linestyle='--')
+        plt.annotate("", xy=(0, 0), xytext=(drive_period/2,0), arrowprops=dict(arrowstyle="<->", color='red'))
+        plt.annotate("$\pi$", xy=(drive_period/2-0.03, 0.1), color='red')
+
+        plt.xlabel("Drive len [dt]", fontsize=15)
+        plt.title("Armonk", fontsize=15)
+        plt.ylabel("Measured signal [a.u.]", fontsize=15)
+        plt.show()
+        return pi_amp,plt
     
     def Cali_l(self,len_max):
         scale_factor = 1e-15
@@ -200,3 +228,8 @@ class Custom_Fgp:
         [circ.append(custom_gate, [i]) for i in qubits]
         circ.add_calibration(self.name, qubits, self.Create_Pulse(), [])
         return circ
+    
+    def State_vec_tomography():
+        return 0
+    def Full_tomography():
+        return 0
