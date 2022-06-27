@@ -138,7 +138,7 @@ class Custom_Fgp:
             fit_params, y_fit = fit_function(drive_amps,
                                  rabi_values, 
                                  lambda x, A, B, drive_period, phi:(A*np.cos(2*np.pi*x/drive_period - phi) + B),
-                                 [-8, 1, 0.6, 0])
+                                 [-8, 1, 1, 0])
             drive_period = fit_params[2]
             pi_amp = abs(drive_period / 2)
             print(counter, ": ", pi_amp)
@@ -147,7 +147,7 @@ class Custom_Fgp:
         fit_params, y_fit = fit_function(drive_amps,
                                  rabi_values, 
                                  lambda x, A, B, drive_period, phi:(A*np.cos(2*np.pi*x/drive_period - phi) + B),
-                                 [-8, 1, 0.6, 0])
+                                 [-8, 1, 1, 0])
         drive_period = fit_params[2]
         pi_amp = abs(drive_period / 2)
         plt.scatter(drive_amps, rabi_values, color='black')
