@@ -19,9 +19,32 @@ from qiskit.compiler import assemble
 from scipy.optimize import curve_fit
 warnings.filterwarnings('ignore')
 from qiskit.tools.jupyter import *
+from qiskit import QuantumRegister, QuantumCircuit, ClassicalRegister, Aer
+from qiskit.quantum_info import state_fidelity
+from qiskit.providers.aer import noise
+
+# Tomography functions
+from qiskit.ignis.verification.tomography import state_tomography_circuits, StateTomographyFitter
+import qiskit.ignis.mitigation.measurement as mc
+import time
 
 test_set= [1,0.5,0.25,2]
 
+def State_vec_tomography(circ, backend):
+    #actual state calculation
+    q2 = QuantumRegister(1)
+    state = QuantumCircuit(q2)
+    state.x(q2[0])
+    job = qk.execute(state, backend=Aer.get_backend('statevector_simulator'))
+    state_results = job.result().get_statevector(bell)
+    t = time.time()
+    test_circ = state_tomography_circuits(circ,[0])
+    job = qk.execute(test_circ, backend=backend, shots=8192)
+    test_state = StateTomographyFitter(job.result(), test_circ).fit()
+    Fidelity = state_fidelity(state,test_state)
+    print('Time taken:', time.time() - t)
+    return Fidelity
+    
 def fit_function(x_values, y_values, function, init_params):
     fitparams, conv = curve_fit(function, x_values, y_values, init_params)
     y_fit = function(x_values, *fitparams)
@@ -238,7 +261,5 @@ class Custom_Fgp:
         circ.add_calibration(self.name, qubits, self.Create_Pulse(), [])
         return circ
     
-    def State_vec_tomography():
-        return 0
     def Full_tomography():
         return 0
