@@ -20,11 +20,13 @@ from scipy.optimize import curve_fit
 warnings.filterwarnings('ignore')
 from qiskit.tools.jupyter import *
 
+test_set= [1,0.5,0.25,2]
 
 def fit_function(x_values, y_values, function, init_params):
     fitparams, conv = curve_fit(function, x_values, y_values, init_params)
     y_fit = function(x_values, *fitparams)
-    return fitparams, y_fit
+    error = np.sqrt(np.diag(conv))
+    return fitparams, y_fit, error
     
 class Custom_Fgp:
     def __init__(self, name, inp,backend):
@@ -130,24 +132,39 @@ class Custom_Fgp:
         drive_amps = np.linspace(drive_amp_min, drive_amp_max, num_rabi_points)
         pi_amp = 2
         counter = 0
+        error_counter=0
+        error= [np.inf,np.inf,np.inf]
         while pi_amp > 0.9:
             counter+=1
             if counter==100:
                 break
             drive_amps,rabi_values = self.Cali(num_rabi_points,counter)
-            fit_params, y_fit = fit_function(drive_amps,
-                                 rabi_values, 
-                                 lambda x, A, B, drive_period, phi:(A*np.cos(2*np.pi*x/drive_period - phi) + B),
-                                 [-8, 1, 1, 0])
-            drive_period = fit_params[2]
+            if(error[1]==np.inf):
+                error_counter=0
+                while (error[1]==np.inf):
+                    fit_params, y_fit, error = fit_function(drive_amps,
+                                         rabi_values, 
+                                         lambda x, A, drive_period, phi:(A*np.sin(2*np.pi*x/drive_period - phi)),
+                                         [-(np.max(rabi_values)-np.min(rabi_values))/2, test_set[error_counter], 0])
+                    #print(error_counter, ": ",test_set[error_counter] , ": " , error)
+                    if((error[1] == np.inf) and error_counter<3):
+                        error_counter+=1
+                    else:
+                        break
+            else:
+                fit_params, y_fit, error = fit_function(drive_amps,
+                                         rabi_values, 
+                                         lambda x, A, drive_period, phi:(A*np.sin(2*np.pi*x/drive_period - phi)),
+                                         [-(np.max(rabi_values)-np.min(rabi_values))/2, test_set[error_counter], 0])
+            drive_period = fit_params[1]
             pi_amp = abs(drive_period / 2)
-            print(counter, ": ", pi_amp)
+            print(counter, "L: ", pi_amp)
         self.length = counter
         drive_amps,rabi_values = self.Cali(50,counter)
-        fit_params, y_fit = fit_function(drive_amps,
+        fit_params, y_fit, error = fit_function(drive_amps,
                                  rabi_values, 
-                                 lambda x, A, B, drive_period, phi:(A*np.cos(2*np.pi*x/drive_period - phi) + B),
-                                 [-8, 1, 1, 0])
+                                 lambda x, A, B, drive_period, phi:(A*np.sin(2*np.pi*x/drive_period - phi) + B),
+                                  [-(np.max(rabi_values)-np.min(rabi_values))/2,0, test_set[error_counter], 0])
         drive_period = fit_params[2]
         pi_amp = abs(drive_period / 2)
         plt.scatter(drive_amps, rabi_values, color='black')
@@ -161,7 +178,7 @@ class Custom_Fgp:
         plt.annotate("$\pi$", xy=(drive_period/2-0.03, 0.1), color='red')
 
         plt.xlabel("Drive len [dt]", fontsize=15)
-        plt.title("Armonk", fontsize=15)
+        plt.title(str(self.backend), fontsize=15)
         plt.ylabel("Measured signal [a.u.]", fontsize=15)
         plt.show()
         return pi_amp,plt
