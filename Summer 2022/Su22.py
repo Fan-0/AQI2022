@@ -36,12 +36,12 @@ def State_vec_tomography(circ, backend):
     state = QuantumCircuit(q2)
     state.x(q2[0])
     job = qk.execute(state, backend=Aer.get_backend('statevector_simulator'))
-    state_results = job.result().get_statevector(bell)
+    state_results = job.result().get_statevector(state)
     t = time.time()
     test_circ = state_tomography_circuits(circ,[0])
     job = qk.execute(test_circ, backend=backend, shots=8192)
     test_state = StateTomographyFitter(job.result(), test_circ).fit()
-    Fidelity = state_fidelity(state,test_state)
+    Fidelity = state_fidelity(state_results,test_state)
     print('Time taken:', time.time() - t)
     return Fidelity
     
