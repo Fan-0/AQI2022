@@ -29,21 +29,6 @@ import qiskit.ignis.mitigation.measurement as mc
 import time
 
 test_set= [1,0.5,0.25,2]
-
-def State_vec_tomography(circ, backend):
-    #actual state calculation
-    q2 = QuantumRegister(1)
-    state = QuantumCircuit(q2)
-    state.x(q2[0])
-    job = qk.execute(state, backend=Aer.get_backend('statevector_simulator'))
-    state_results = job.result().get_statevector(state)
-    t = time.time()
-    test_circ = state_tomography_circuits(circ,[0])
-    job = qk.execute(test_circ, backend=backend, shots=8192)
-    test_state = StateTomographyFitter(job.result(), test_circ).fit()
-    Fidelity = state_fidelity(state_results,test_state)
-    print('Time taken:', time.time() - t)
-    return Fidelity
     
 def fit_function(x_values, y_values, function, init_params):
     fitparams, conv = curve_fit(function, x_values, y_values, init_params)
@@ -260,6 +245,23 @@ class Custom_Fgp:
         [circ.append(custom_gate, [i]) for i in qubits]
         circ.add_calibration(self.name, qubits, self.Create_Pulse(), [])
         return circ
-    
-    def Full_tomography():
-        return 0
+
+def Full_tomography(circ, backend):
+    t = time.time()
+    test_circ = state_tomography_circuits(circ,[0])
+    job = qk.execute(test_circ, backend=backend, shots=8192)
+    test_state = StateTomographyFitter(job.result(), test_circ).fit()
+    print('Tomography Time taken:', time.time() - t)
+    return test_state
+
+def State_Fidel(circ, backend):
+    #actual state calculation
+    q2 = QuantumRegister(1)
+    state = QuantumCircuit(q2)
+    state.x(q2[0])
+    job = qk.execute(state, backend=Aer.get_backend('statevector_simulator'))
+    state_results = job.result().get_statevector(state)
+    test_state = Full_tomography(circ,backend)
+    t = time.time()
+    Fidelity = state_fidelity(state_results,test_state)
+    print('Fidelity Fitting Time taken:', time.time() - t)    
