@@ -27,23 +27,24 @@ from matplotlib import animation
 from qiskit.visualization import visualize_transition
 from mpl_toolkits.mplot3d import Axes3D
 from qiskit.visualization.bloch import Bloch
-from IPython.display import HTML
+#from IPython.display import HTML
 from qiskit.visualization import plot_bloch_vector
 from qiskit import transpile, schedule as build_schedule
 import qiskit.result.result as resultifier
-import numpy as np
 import scipy.signal as si
 import scipy.linalg as la
 import matplotlib.pyplot as plt
-import qiskit as qk
 from qiskit import Aer
+import datetime
 from qiskit.providers.ibmq.managed import IBMQJobManager
 from qiskit.visualization.pulse_v2 import device_info, stylesheet
 from qiskit.visualization.pulse_v2.events import ChannelEvents
 from qiskit.visualization.pulse_v2.generators import gen_filled_waveform_stepwise
 import  qiskit.pulse.transforms.canonicalization as canon
 from joblib import Parallel, delayed
+from qiskit.providers.fake_provider import ConfigurableFakeBackend,FakeArmonkV2
 import os
+import pickle
 
 # Tomography functions
 from qiskit.ignis.verification.tomography import state_tomography_circuits, StateTomographyFitter
@@ -52,16 +53,39 @@ import time
 test_set= [1,0.5,0.25,2]
     
 #defenitions for spectroscopy
-cpu_count = 10
+cpu_count = 2
 noise_power = 1e-3
 num_noise_trajs = 30
 
+backend = ConfigurableFakeBackend("memer",1)
+
+#Pickle fuctions
+def loadData(inp):
+    # for reading also binary mode is important
+    dbfile = open(inp, 'rb')     
+    db = pickle.load(dbfile)
+    dbfile.close()
+    return db
 
 def fit_function(x_values, y_values, function, init_params):
     fitparams, conv = curve_fit(function, x_values, y_values, init_params)
     y_fit = function(x_values, *fitparams)
     error = np.sqrt(np.diag(conv))
     return fitparams, y_fit, error
+
+class spec_data:
+    def __init__(self,all_probs,circ_batch,name=datetime.datetime.now()):
+        self.all_probs = all_probs
+        self.circ_batch =circ_batch
+        self.name = name
+    
+    def dump(self):
+        data = {"spec_data",self.all_probs,self.circ_batch}
+        file = open(self.name, 'wb')
+        pickle.dump(data,file)
+        file.close()
+        
+        
     
 class Custom_Fgp:
     def __init__(self, name, inp,backend):
@@ -295,7 +319,7 @@ def State_Fidel(circ, backend):
     return Fidelity
     
 def plot_m(state):
-return 0
+    return 0
 
 def our_tomography_circuits(circ,counter):
     cz = qk.QuantumCircuit(1,1,name ="('Z',)")
@@ -496,7 +520,8 @@ def Spec(data,start,end,num_center_freqs=100,backend=backend, option = 0):
     # Run circuits
     armonk_model = PulseSystemModel.from_backend(backend)
     backend_sim = PulseSimulator(system_model=armonk_model)
-    results = Parallel(n_jobs=cpu_count)(delayed(runfunc)(i,backend_sim) for i in circ_batch)
+    print(circ_batch[0])
+    results = runfunc(circ_batch,backend_sim)#Parallel(n_jobs=cpu_count)(delayed(runfunc)(i,backend_sim) for i in circ_batch)
     '''job_manager = IBMQJobManager()
     job_set = job_manager.run(circ_batch, backend=backend, shots = shots, name=('Spectrosopy'+str(time.strftime("%H:%M:%S", time.localtime()))))
     results = job_set.results()'''
@@ -515,4 +540,4 @@ def Spec(data,start,end,num_center_freqs=100,backend=backend, option = 0):
         counter+=1
         prob=0
     
-    return all_probs, circ_batch
+    return spec_data(all_probs, circ_batch)
