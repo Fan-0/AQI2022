@@ -42,7 +42,9 @@ from qiskit.visualization.pulse_v2.events import ChannelEvents
 from qiskit.visualization.pulse_v2.generators import gen_filled_waveform_stepwise
 import  qiskit.pulse.transforms.canonicalization as canon
 from joblib import Parallel, delayed
-from qiskit.providers.fake_provider import ConfigurableFakeBackend,FakeArmonkV2
+from qiskit.compiler import transpile
+from qiskit.providers.fake_provider import ConfigurableFakeBackend,FakeArmonkV2,FakeOpenPulse2Q
+from qiskit.pulse.transforms import block_to_schedule
 import os
 import pickle
 
@@ -56,8 +58,8 @@ test_set= [1,0.5,0.25,2]
 cpu_count = 2
 noise_power = 1e-3
 num_noise_trajs = 30
-
-backend = ConfigurableFakeBackend("memer",1)
+shots = 100 
+backend = FakeOpenPulse2Q()#ConfigurableFakeBackend("memer",1)
 
 #Pickle fuctions
 def loadData(inp):
@@ -451,7 +453,7 @@ def parametrize_circ(circ,noise_traj_list,backend):
             pulse.measure(qubits=[0], registers=[pulse.MemorySlot(0)])
         for i in range(len(par)):
             temp.assign_parameters({par[i]: traj[i]}, inplace=True)
-        batch.append(temp)
+        batch.append(block_to_schedule(temp))
     return batch
 
 def shift_all(circ, traj):
@@ -469,7 +471,7 @@ def parametrize_circ_1(circ,noise_traj_list,backend):
         with pulse.build(backend=backend,default_alignment='sequential') as temp:
             pulse.play(shift_all(circ,traj), pulse.drive_channel(0))
             pulse.measure(qubits=[0], registers=[pulse.MemorySlot(0)])
-        batch.append(temp)
+        batch.append(block_to_schedule(temp))
     return batch
 
 def schwarma_trajectories(a, b, num_gates, num_trajectories):
@@ -485,11 +487,8 @@ def schwarma_trajectories(a, b, num_gates, num_trajectories):
 
 shots=1000
 def runfunc(circ,backend_sim):
-    rabi_qobj = assemble(circ, 
-                     backend=backend_sim,
-                     meas_level=2, 
-                     shots=100)
-    results = backend_sim.run(rabi_qobj).result()
+    rabi_qobj = transpile(circ, backend=backend_sim)
+    results = backend_sim.run(rabi_qobj,shots = shots).result()
     return results
 
 
@@ -520,7 +519,6 @@ def Spec(data,start,end,num_center_freqs=100,backend=backend, option = 0):
     # Run circuits
     armonk_model = PulseSystemModel.from_backend(backend)
     backend_sim = PulseSimulator(system_model=armonk_model)
-    print(circ_batch[0])
     results = runfunc(circ_batch,backend_sim)#Parallel(n_jobs=cpu_count)(delayed(runfunc)(i,backend_sim) for i in circ_batch)
     '''job_manager = IBMQJobManager()
     job_set = job_manager.run(circ_batch, backend=backend, shots = shots, name=('Spectrosopy'+str(time.strftime("%H:%M:%S", time.localtime()))))
