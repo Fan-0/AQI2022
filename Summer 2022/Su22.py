@@ -47,6 +47,7 @@ from qiskit.providers.fake_provider import ConfigurableFakeBackend,FakeArmonkV2,
 from qiskit.pulse.transforms import block_to_schedule
 import os
 import pickle
+import multiprocessing as mp
 
 # Tomography functions
 from qiskit.ignis.verification.tomography import state_tomography_circuits, StateTomographyFitter
@@ -57,7 +58,7 @@ test_set= [1,0.5,0.25,2]
 #defenitions for spectroscopy
 cpu_count = np.rint(os.cpu_count()*0.8)
 noise_power = 1e-3
-num_noise_trajs = 3
+num_noise_trajs = 30
 shots = 100
 backend = FakeOpenPulse2Q()#ConfigurableFakeBackend("memer",1)
 
@@ -501,10 +502,10 @@ def schwarma_trajectories(a, b, num_gates, num_trajectories):
     return traj_list
 
 def runfunc(circ,backend_sim):
-    results = [] 
-    for i in circ:
-        rabi_qobj = transpile(i, backend=backend_sim)
-        results.append(backend_sim.run(rabi_qobj,shots = shots).result())
+    #results = [] 
+    #for i in circ:
+    rabi_qobj = transpile(circ, backend=backend_sim)
+    results = (backend_sim.run(rabi_qobj,shots = shots).result())
     return results
 
 
@@ -535,12 +536,15 @@ def Spec(data,start,end,num_center_freqs=100,backend=backend, option = 0):
     # Run circuits
     #armonk_model = PulseSystemModel.from_backend(backend)
     #backend_sim = PulseSimulator(system_model=armonk_model)
-    results = runfunc(circ_batch,backend)
-    #Parallel(n_jobs=cpu_count)(delayed(runfunc)(i,backend_sim) for i in circ_batch)
+    pool = mp.Pool(mp.cpu_count())
+    results = pool.starmap(runfunc, [(i,backend) for i in circ_batch])
+    pool.close()
+    #Parallel(n_jobs=cpu_count,verbose=10)(delayed(runfunc)(i,backend) for i in circ_batch)
+    #runfunc(circ_batch,backend)
     '''job_manager = IBMQJobManager()
     job_set = job_manager.run(circ_batch, backend=backend, shots = shots, name=('Spectrosopy'+str(time.strftime("%H:%M:%S", time.localtime()))))
     results = job_set.results()'''
-    
+    print(results)
     # Compile Results
     cc=0
     prob = 0
@@ -548,11 +552,16 @@ def Spec(data,start,end,num_center_freqs=100,backend=backend, option = 0):
     for i in range(int(len(circ_batch)/num_noise_trajs)):
         for circ in circ_batch[i*num_noise_trajs:((i+1)*num_noise_trajs)]:
             one_counts = results[cc].get_counts().get('1')#zero_counts = results.get_counts(cc).get('1')
+            if (one_counts == None): 
+                one_counts=0
+            print(one_counts)
             prob += one_counts/shots
+            print(prob)
             cc+=1
+        print(prob,"**************")
         prob = prob/num_noise_trajs
         all_probs[int(center_idxs[counter]), :] = centers[counter], prob
         counter+=1
-        prob=0
+        prob = 0
     final = spec_data(all_probs, circ_batch,name='output')
     return final
