@@ -8,10 +8,9 @@ import os
 def main():
     args = sys.argv[1:]
     pulse = qs.loadData(args[0])
-    data = qs.Spec(pulse,0.02,5,100,option=1)
-    print(type(data))
-    data.draw()
-    data.dump()
+    backend = FakeArmonkV2
+    data= qs.Spec(pulse,0.02,0.98,100,option=1)
+    print(?data)
     
   
 if __name__=="__main__":

@@ -55,10 +55,10 @@ import time
 test_set= [1,0.5,0.25,2]
     
 #defenitions for spectroscopy
-cpu_count = 2
+cpu_count = np.rint(os.cpu_count()*0.8)
 noise_power = 1e-3
-num_noise_trajs = 30
-shots = 100 
+num_noise_trajs = 3
+shots = 100
 backend = FakeOpenPulse2Q()#ConfigurableFakeBackend("memer",1)
 
 #Pickle fuctions
@@ -76,14 +76,29 @@ def fit_function(x_values, y_values, function, init_params):
     return fitparams, y_fit, error
 
 class spec_data:
-    def __init__(self,all_probs,circ_batch,name=datetime.datetime.now()):
-        self.all_probs = all_probs
-        self.circ_batch =circ_batch
-        self.name = name
+    def __init__(self,filename,circ_batch=1,name=(str(datetime.datetime.now())[11:]+".p")):
+        if isinstance(filename,list) or isinstance(filename,np.ndarray):
+            self.all_probs = filename
+            self.circ_batch = np.array(circ_batch) 
+            self.name = name
+        elif isinstance(filename,str):
+            data = loadData(filename)
+            self.all_probs = data[1]
+            self.circ_batch = data[2]
+            self.name = name
+    
+    def draw(self):
+        fig = plt.figure(dpi=100)
+        ax = fig.add_subplot(111)
+        print(self.all_probs)
+        ax.plot(self.all_probs[:,0], self.all_probs[:,1])
+        ax.set_ylabel('Survival Probability')
+        ax.set_xlabel('Center Frequency')  
+        plt.show()
     
     def dump(self):
-        data = {"spec_data",self.all_probs,self.circ_batch}
-        file = open(self.name, 'wb')
+        data = ["spec_data",self.all_probs,self.circ_batch]
+        file = open(str("output"), 'wb')
         pickle.dump(data,file)
         file.close()
         
@@ -485,10 +500,11 @@ def schwarma_trajectories(a, b, num_gates, num_trajectories):
         traj_list.append(angles)
     return traj_list
 
-shots=1000
 def runfunc(circ,backend_sim):
-    rabi_qobj = transpile(circ, backend=backend_sim)
-    results = backend_sim.run(rabi_qobj,shots = shots).result()
+    results = [] 
+    for i in circ:
+        rabi_qobj = transpile(i, backend=backend_sim)
+        results.append(backend_sim.run(rabi_qobj,shots = shots).result())
     return results
 
 
@@ -517,9 +533,10 @@ def Spec(data,start,end,num_center_freqs=100,backend=backend, option = 0):
             circ_batch+=(parametrize_circ_1(data,noise_traj_list,backend))
 
     # Run circuits
-    armonk_model = PulseSystemModel.from_backend(backend)
-    backend_sim = PulseSimulator(system_model=armonk_model)
-    results = runfunc(circ_batch,backend_sim)#Parallel(n_jobs=cpu_count)(delayed(runfunc)(i,backend_sim) for i in circ_batch)
+    #armonk_model = PulseSystemModel.from_backend(backend)
+    #backend_sim = PulseSimulator(system_model=armonk_model)
+    results = runfunc(circ_batch,backend)
+    #Parallel(n_jobs=cpu_count)(delayed(runfunc)(i,backend_sim) for i in circ_batch)
     '''job_manager = IBMQJobManager()
     job_set = job_manager.run(circ_batch, backend=backend, shots = shots, name=('Spectrosopy'+str(time.strftime("%H:%M:%S", time.localtime()))))
     results = job_set.results()'''
@@ -530,12 +547,12 @@ def Spec(data,start,end,num_center_freqs=100,backend=backend, option = 0):
     counter = 0
     for i in range(int(len(circ_batch)/num_noise_trajs)):
         for circ in circ_batch[i*num_noise_trajs:((i+1)*num_noise_trajs)]:
-            zero_counts = results.get_counts(cc).get('1')
-            prob += zero_counts/shots
+            one_counts = results[cc].get_counts().get('1')#zero_counts = results.get_counts(cc).get('1')
+            prob += one_counts/shots
             cc+=1
         prob = prob/num_noise_trajs
         all_probs[int(center_idxs[counter]), :] = centers[counter], prob
         counter+=1
         prob=0
-    
-    return spec_data(all_probs, circ_batch)
+    final = spec_data(all_probs, circ_batch,name='output')
+    return final
