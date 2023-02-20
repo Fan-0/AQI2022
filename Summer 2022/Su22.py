@@ -77,11 +77,11 @@ def fit_function(x_values, y_values, function, init_params):
     return fitparams, y_fit, error
 
 class spec_data:
-    def __init__(self,filename,circ_batch=1,name=(str(datetime.datetime.now())[11:]+".p")):
+    def __init__(self,filename,circ_batch=1,name=(str(str(datetime.datetime.now())[11:]+".p").replace(":", "") )):
         if isinstance(filename,list) or isinstance(filename,np.ndarray):
             self.all_probs = filename
             self.circ_batch = np.array(circ_batch) 
-            self.name = name
+            self.name = (name + "_" + str(str(datetime.datetime.now())[11:]).replace(":", "_").replace('.','_')+".p")
         elif isinstance(filename,str):
             data = loadData(filename)
             self.all_probs = data[1]
@@ -91,7 +91,7 @@ class spec_data:
     def draw(self):
         fig = plt.figure(dpi=100)
         ax = fig.add_subplot(111)
-        print(self.all_probs)
+        #print(self.all_probs)
         ax.plot(self.all_probs[:,0], self.all_probs[:,1])
         ax.set_ylabel('Survival Probability')
         ax.set_xlabel('Center Frequency')  
@@ -99,13 +99,18 @@ class spec_data:
     
     def dump(self):
         data = ["spec_data",self.all_probs,self.circ_batch]
-        file = open(str("output"), 'wb')
+        file = open(str(self.name), 'wb')
         pickle.dump(data,file)
         file.close()
         
-def temprun(circ, backends,shots, meas_level=1,meas_return='avg'):
-    result = backends.run(circ,shots=shots,meas_level=meas_level,meas_return=meas_return)
-    return result  
+def temprun(circ, backends,shots):
+    resultt = backends.run(circ,shots=shots).result()
+    temp = resultt.get_counts().get('1')#zero_counts = results.get_counts(cc).get('1')
+    if (temp == None): 
+        temp=0
+    #print(one_counts)
+    prob = temp/shots
+    return prob  
         
     
 class Custom_Fgp:
@@ -189,27 +194,46 @@ class Custom_Fgp:
         
     def Cali(self,num_rabi_points,length):
         scale_factor = 1e-15
-        drive_amp_min = -1
+        drive_amp_min = 0
         drive_amp_max = 1
+        shots1=100
+        rabi_values= []
         drive_amps = np.linspace(drive_amp_min, drive_amp_max, num_rabi_points)
 
         rabi_schedules = [self.Customize_pulse_2(a,length) for a in drive_amps]
-        #return rabi_schedules
-        num_shots_per_point = 1024
-        #pool = mp.Pool(mp.cpu_count())
-        job = self.backend.run(rabi_schedules,shots=100,meas_level=1,meas_return='avg')#pool.starmap(temprun, [(i,self.backend,num_shots_per_point,1,'avg') for i in rabi_schedules])
-        #pool.close()
-        rabi_results = job.result(timeout=120)
-        rabi_values = []
-        for i in range(num_rabi_points):
-            # Get the results for `qubit` from the ith experiment
-            rabi_values.append(rabi_results.get_memory(i)[0] * scale_factor)
-
-        rabi_values = np.real(self.baseline_remove(rabi_values))
-
-        return drive_amps,rabi_values
+        num_shots_per_point = 100
+        pool = mp.Pool(mp.cpu_count())
+        rabi_values.append(pool.starmap(temprun, [(i,self.backend,num_shots_per_point) for i in rabi_schedules]))
+        pool.close()
+        return drive_amps,rabi_values[0]
     
     def full_cal(self):
+        drive_amps,rabi_values = self.Cali(25,1)
+        print(rabi_values) 
+        print(np.gradient(rabi_values,2))
+        print(np.argmax(np.gradient(rabi_values,2)<0))
+        drive_period = drive_amps[np.argmax(np.gradient(rabi_values,2)<0)]
+        fit_params, y_fit, error = fit_function(drive_amps,
+                                 rabi_values, 
+                                 lambda x, drive_period:(-0.5*np.cos(2*np.pi*x/drive_period)+0.5),
+                                         [drive_period+0.2])
+        drive_period = fit_params[0]
+        pi_amp = abs(drive_period/2)
+        plt.scatter(drive_amps, rabi_values, color='black')
+        plt.plot(drive_amps, y_fit, color='red')
+        print(pi_amp)
+        plt.axvline(0, color='red', linestyle='--')
+        plt.axvline(drive_period/2, color='red', linestyle='--')
+        plt.annotate("", xy=(0, 0), xytext=(drive_period/2,0), arrowprops=dict(arrowstyle="<->", color='red'))
+        plt.annotate("$\pi$", xy=(drive_period/2-0.03, 0.1), color='red')
+
+        plt.xlabel("Drive len [dt]", fontsize=15)
+        plt.title(str(self.backend), fontsize=15)
+        plt.ylabel("Measured signal [a.u.]", fontsize=15)
+        plt.show()
+        return pi_amp,plt
+    
+    '''def full_cal(self):
         scale_factor = 1e-15
         num_rabi_points = 10
         drive_amp_min = -1
@@ -266,7 +290,7 @@ class Custom_Fgp:
         plt.title(str(self.backend), fontsize=15)
         plt.ylabel("Measured signal [a.u.]", fontsize=15)
         plt.show()
-        return pi_amp,plt
+        return pi_amp,plt'''
     
     def Cali_l(self,len_max):
         scale_factor = 1e-15
@@ -517,8 +541,10 @@ def runfunc(circ,backend_sim):
     return results
 
 
-def Spec(data,start,end,num_center_freqs=100,backend=backend, option = 0):  
+def Spec(data,start,end,num_center_freqs=100,backend=backend, option = 0,name="output"):  
     #option 0 beaks upp pulse into 64dt chuncks option 1 will morph shift into pulse
+    if isinstance(data,Custom_Fgp):
+       data = data.norm*data.pi_p
     if(option):
         num_gates=int(len(data))
     else:
@@ -571,5 +597,5 @@ def Spec(data,start,end,num_center_freqs=100,backend=backend, option = 0):
         all_probs[int(center_idxs[counter]), :] = centers[counter], prob
         counter+=1
         prob = 0
-    final = spec_data(all_probs, circ_batch,name='output')
+    final = spec_data(all_probs, circ_batch,name=name)
     return final
