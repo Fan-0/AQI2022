@@ -103,6 +103,9 @@ class spec_data:
         pickle.dump(data,file)
         file.close()
         
+def temprun(circ, backends,shots, meas_level=1,meas_return='avg'):
+    result = backends.run(circ,shots=shots,meas_level=meas_level,meas_return=meas_return)
+    return result  
         
     
 class Custom_Fgp:
@@ -171,11 +174,19 @@ class Custom_Fgp:
         for i in range(num_rabi_points):
             # Get the results for `qubit` from the ith experiment
             rabi_values.append(rabi_results.get_memory(i)[0] * scale_factor)
+        """_summary_
 
+        Args:
+            num_rabi_points (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """
         rabi_values = np.real(self.baseline_remove(rabi_values))
 
         return drive_amps,rabi_values'''
     
+        
     def Cali(self,num_rabi_points,length):
         scale_factor = 1e-15
         drive_amp_min = -1
@@ -185,12 +196,9 @@ class Custom_Fgp:
         rabi_schedules = [self.Customize_pulse_2(a,length) for a in drive_amps]
         #return rabi_schedules
         num_shots_per_point = 1024
-        job = self.backend.run(rabi_schedules, 
-                  meas_level=1, 
-                  meas_return='avg', 
-                  shots=num_shots_per_point)
-        job_monitor(job)
-        
+        #pool = mp.Pool(mp.cpu_count())
+        job = self.backend.run(rabi_schedules,shots=100,meas_level=1,meas_return='avg')#pool.starmap(temprun, [(i,self.backend,num_shots_per_point,1,'avg') for i in rabi_schedules])
+        #pool.close()
         rabi_results = job.result(timeout=120)
         rabi_values = []
         for i in range(num_rabi_points):
@@ -216,38 +224,38 @@ class Custom_Fgp:
             if counter==100:
                 break
             drive_amps,rabi_values = self.Cali(num_rabi_points,counter)
-            if(error[1]==np.inf):
+            if(error[0]==np.inf):
                 error_counter=0
-                while (error[1]==np.inf):
+                while (error[0]==np.inf):
                     fit_params, y_fit, error = fit_function(drive_amps,
                                          rabi_values, 
-                                         lambda x, A, drive_period, phi:(A*np.sin(2*np.pi*x/drive_period - phi)),
-                                         [-(np.max(rabi_values)-np.min(rabi_values))/2, test_set[error_counter], 0])
+                                         lambda x, drive_period:((-(np.max(rabi_values)-np.min(rabi_values)/2))*np.sin(2*np.pi*x/drive_period)),
+                                         [test_set[error_counter]])
                     #print(error_counter, ": ",test_set[error_counter] , ": " , error)
-                    if((error[1] == np.inf) and error_counter<3):
+                    if((error[0] == np.inf) and error_counter<3):
                         error_counter+=1
                     else:
                         break
             else:
                 fit_params, y_fit, error = fit_function(drive_amps,
                                          rabi_values, 
-                                         lambda x, A, drive_period, phi:(A*np.sin(2*np.pi*x/drive_period - phi)),
-                                         [-(np.max(rabi_values)-np.min(rabi_values))/2, test_set[error_counter], 0])
-            drive_period = fit_params[1]
+                                         lambda x, drive_period:((-(np.max(rabi_values)-np.min(rabi_values)/2))*np.sin(2*np.pi*x/drive_period)),
+                                         [test_set[error_counter]])
+            drive_period = fit_params[0]
             pi_amp = abs(drive_period / 2)
             print(counter, "L: ", pi_amp)
         self.length = counter
         drive_amps,rabi_values = self.Cali(50,counter)
         fit_params, y_fit, error = fit_function(drive_amps,
                                  rabi_values, 
-                                 lambda x, A, B, drive_period, phi:(A*np.sin(2*np.pi*x/drive_period - phi) + B),
-                                  [-(np.max(rabi_values)-np.min(rabi_values))/2,0, test_set[error_counter], 0])
-        drive_period = fit_params[2]
+                                 lambda x, drive_period:((-(np.max(rabi_values)-np.min(rabi_values)/2))*np.sin(2*np.pi*x/drive_period)),
+                                         [test_set[error_counter]])
+        drive_period = fit_params[0]
         pi_amp = abs(drive_period / 2)
         plt.scatter(drive_amps, rabi_values, color='black')
         plt.plot(drive_amps, y_fit, color='red')
         print(fit_params)
-        drive_period = fit_params[2] # get period of rabi oscillation
+        drive_period = fit_params[0] # get period of rabi oscillation
 
         plt.axvline(0, color='red', linestyle='--')
         plt.axvline(drive_period/2, color='red', linestyle='--')
@@ -554,11 +562,11 @@ def Spec(data,start,end,num_center_freqs=100,backend=backend, option = 0):
             one_counts = results[cc].get_counts().get('1')#zero_counts = results.get_counts(cc).get('1')
             if (one_counts == None): 
                 one_counts=0
-            print(one_counts)
+           #print(one_counts)
             prob += one_counts/shots
-            print(prob)
+            #print(prob)
             cc+=1
-        print(prob,"**************")
+        #print(prob,"**************")
         prob = prob/num_noise_trajs
         all_probs[int(center_idxs[counter]), :] = centers[counter], prob
         counter+=1
