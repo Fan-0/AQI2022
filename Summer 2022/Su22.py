@@ -58,7 +58,7 @@ test_set= [1,0.5,0.25,2]
 #defenitions for spectroscopy
 cpu_count = np.rint(os.cpu_count()*0.8)
 noise_power = 1e-3
-num_noise_trajs = 30
+num_noise_trajs = 3
 shots = 100
 backend = FakeOpenPulse2Q()#ConfigurableFakeBackend("memer",1)
 
@@ -118,8 +118,6 @@ class Custom_Fgp:
         self.name=name
         self.input = np.array(inp)
         self.backend = backend
-        drive_sigma_sec = 0.015 * 1.0e-6                          # This determines the actual width of the gaussian
-        drive_duration_sec = drive_sigma_sec   
         #self.norm = self.input/np.sqrt((self.input**2).sum())
         self.norm = self.input/self.input.max()
         self.par = Parameter('drive_amp')
@@ -538,6 +536,7 @@ def runfunc(circ,backend_sim):
     #for i in circ:
     rabi_qobj = transpile(circ, backend=backend_sim)
     results = (backend_sim.run(rabi_qobj,shots = shots).result())
+    print("done")
     return results
 
 
@@ -593,6 +592,101 @@ def Spec(data,start,end,num_center_freqs=100,backend=backend, option = 0,name="o
             #print(prob)
             cc+=1
         #print(prob,"**************")
+        prob = prob/num_noise_trajs
+        all_probs[int(center_idxs[counter]), :] = centers[counter], prob
+        counter+=1
+        prob = 0
+    final = spec_data(all_probs, circ_batch,name=name)
+    return final
+
+def noisy_cpmg_experiment(N, M,signal):
+    # N: Number of repetitions (cycles)
+    # M: Number of identity gates for interpulse delay
+    
+    tot_num_gates = N*(2 + 4*M) + 2
+    x = qk.circuit.ParameterVector('x', length=tot_num_gates)
+    
+    circ = qk.QuantumCircuit(1,1)
+    circ.rx(np.pi/2, 0)
+    circ.rz(x[0], 0)
+    idx = 1
+    for iN  in range(N):
+        for _ in range(M):
+            circ.i(0)
+            circ.rz(x[idx],0)
+            idx += 1
+        signal.add_as_gate(circ,[0])
+        circ.rz(x[idx],0)
+        idx += 1
+        for _ in range(2*M):
+            circ.i(0)
+            circ.rz(x[idx],0)
+            idx += 1
+        signal.add_as_gate(circ,[0])
+        circ.rz(x[idx],0)
+        idx += 1
+        for _ in range(M):
+            circ.i(0)
+            circ.rz(x[idx],0)
+            idx += 1
+    circ.rx(-np.pi/2, 0)
+    circ.rz(x[idx],0)
+    circ.measure(0,0)
+    return circ, x
+
+def Cgmp_Spec(data,start,end,num_center_freqs=100,backend=backend, option = 0,name="output"):  
+    #option 0 beaks upp pulse into 64dt chuncks option 1 will morph shift into pulse
+    if not isinstance(data,Custom_Fgp):
+       data = Custom_Fgp("spec",data,backend = backend)
+    N, M = 1,1
+    num_gates = N*(2 + 4*M) + 2
+    noisy_exp, param_vec = noisy_cpmg_experiment(N, M, data)
+    noisy_exp.draw('mpl')
+    circ_batch = []
+    center_idxs=[]
+    centers=[]
+    all_probs = np.zeros([num_center_freqs, 2])
+    for center_idx, center in enumerate(np.linspace(start, end, num_center_freqs)): # vary noise center frequency
+        center_idxs.append(center_idx)
+        centers.append(center)
+        #print('Probing Filter Function at Normalized Frequency: ', center)
+        # Generate noise trajectories
+        a, b = generate_noise_params(noise_power, center)
+        noise_traj_list = np.array(schwarma_trajectories(a, b, num_gates, num_noise_trajs))
+    
+        # Build noisy circuit dictionary
+        for traj in noise_traj_list:
+            bound_params = {param_vec: traj}
+            bound_circ = noisy_exp.bind_parameters(bound_params)
+            circ_batch.append(bound_circ)
+
+    # Run circuits
+    #armonk_model = PulseSystemModel.from_backend(backend)
+    #backend_sim = PulseSimulator(system_model=armonk_model)
+    print("hi")
+    pool = mp.Pool(mp.cpu_count())
+    results = pool.starmap(runfunc, [(i,backend) for i in circ_batch])
+    pool.close()
+    #Parallel(n_jobs=cpu_count,verbose=10)(delayed(runfunc)(i,backend) for i in circ_batch)
+    #runfunc(circ_batch,backend)
+    '''job_manager = IBMQJobManager()
+    job_set = job_manager.run(circ_batch, backend=backend, shots = shots, name=('Spectrosopy'+str(time.strftime("%H:%M:%S", time.localtime()))))
+    results = job_set.results()'''
+    print(results)
+    # Compile Results
+    cc=0
+    prob = 0
+    counter = 0
+    for i in range(int(len(circ_batch)/num_noise_trajs)):
+        for circ in circ_batch[i*num_noise_trajs:((i+1)*num_noise_trajs)]:
+            one_counts = results[cc].get_counts().get('0')#zero_counts = results.get_counts(cc).get('1')
+            if (one_counts == None): 
+                one_counts=0
+            print(one_counts)
+            prob += one_counts/shots
+            #print(prob)
+            cc+=1
+        print(prob,"**************")
         prob = prob/num_noise_trajs
         all_probs[int(center_idxs[counter]), :] = centers[counter], prob
         counter+=1

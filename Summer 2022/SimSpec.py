@@ -7,10 +7,12 @@ import os
 
 def main():
     args = sys.argv[1:]
+    #pulse = qs.Custom_Fgp("spec",qs.loadData(args[0]))
     test = qs.loadData(args[0])
     backend = FakeOpenPulse2Q()
     pulse = qs.Custom_Fgp('low_freq',test,backend)
-    data = qs.Spec(pulse,0,1,1000,option=1,name=str(args[0]).split('\\')[1][:-2])
+    data = qs.Cgmp_Spec(pulse,0.2,0.98,10,name=str(args[0]).split('\\')[1][:-2])
+    #data = qs.Spec(pulse,-0.125,0.125,1000,option=1,name=str(args[0]).split('\\')[1][:-2])
     print(type(data))
     data.draw()
     data.dump()
