@@ -484,7 +484,7 @@ def generate_noise_params(s_pow, w0):
     a = [1]
     NN = 512
     BW = 0.005 # changes narrowness of noise spectrum
-    b = si.firwin(NN, BW)*np.cos(w0*np.pi*np.arange(NN))
+    b = si.firwin(NN, BW)*np.cos(w0*np.arange(NN))
     b = b/la.norm(b)*np.sqrt(s_pow)
     return a, b
 
@@ -551,13 +551,15 @@ def Spec(data,start,end,num_center_freqs=100,backend=backend, option = 0,name="o
     circ_batch = []
     center_idxs=[]
     centers=[]
+    omega = 0
     all_probs = np.zeros([num_center_freqs, 2])
     for center_idx, center in enumerate(np.linspace(start, end, num_center_freqs)): # vary noise center frequency
         center_idxs.append(center_idx)
-        centers.append(center)
         #print('Probing Filter Function at Normalized Frequency: ', center)
         # Generate noise trajectories
-        a, b = generate_noise_params(noise_power, center)
+        omega = center*(2*np.pi)/float(backend.configuration().dt)
+        centers.append(center)
+        a, b = generate_noise_params(noise_power, omega)
         noise_traj_list = np.array(schwarma_trajectories(a, b, num_gates, num_noise_trajs))
     
         # Build noisy circuit dictionary
@@ -593,7 +595,7 @@ def Spec(data,start,end,num_center_freqs=100,backend=backend, option = 0,name="o
             cc+=1
         #print(prob,"**************")
         prob = prob/num_noise_trajs
-        all_probs[int(center_idxs[counter]), :] = centers[counter], prob
+        all_probs[int(center_idxs[counter]), :] = centers[counter], 1-prob
         counter+=1
         prob = 0
     final = spec_data(all_probs, circ_batch,name=name)
