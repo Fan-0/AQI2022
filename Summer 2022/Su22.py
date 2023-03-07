@@ -480,11 +480,10 @@ def generate_anim(circ,backend, output):
     plt.close(fig)
     return states_pulse, DMS
 
-def generate_noise_params(s_pow, w0):
+def generate_noise_params(s_pow, w0,NN):
     a = [1]
-    NN = 512
     BW = 0.005 # changes narrowness of noise spectrum
-    b = si.firwin(NN, BW)*np.cos(w0*np.arange(NN))
+    b = si.firwin(NN, BW)*np.cos(w0*np.pi*np.arange(NN))
     b = b/la.norm(b)*np.sqrt(s_pow)
     return a, b
 
@@ -557,9 +556,9 @@ def Spec(data,start,end,num_center_freqs=100,backend=backend, option = 0,name="o
         center_idxs.append(center_idx)
         #print('Probing Filter Function at Normalized Frequency: ', center)
         # Generate noise trajectories
-        omega = center*(2*np.pi)/float(backend.configuration().dt)
+        omega = center*(2)/float(backend.configuration().dt)
         centers.append(center)
-        a, b = generate_noise_params(noise_power, omega)
+        a, b = generate_noise_params(noise_power, center,len(data))
         noise_traj_list = np.array(schwarma_trajectories(a, b, num_gates, num_noise_trajs))
     
         # Build noisy circuit dictionary
