@@ -33,7 +33,6 @@ from qiskit import transpile, schedule as build_schedule
 import qiskit.result.result as resultifier
 import scipy.signal as si
 import scipy.linalg as la
-import matplotlib.pyplot as plt
 from qiskit import Aer
 import datetime
 from qiskit.providers.ibmq.managed import IBMQJobManager
@@ -487,14 +486,15 @@ def generate_noise_params(s_pow, w0,NN):
     b = b/la.norm(b)*np.sqrt(s_pow)
     return a, b
 
-def parametrize_circ(circ,noise_traj_list,backend):
+def parametrize_circ(circ,noise_traj_list,backend,l):
     par = qk.circuit.ParameterVector('thetha', length=int(len(circ)/64))
     batch = []
     for traj in noise_traj_list:
         with pulse.build(backend=backend,default_alignment='sequential') as temp:
-            for j in range(int(len(circ)/64)):
-                pulse.play(circ[j*64:(j+1)*64], pulse.drive_channel(0))
-                pulse.shift_phase(par[j],pulse.drive_channel(0))
+            for _ in range(l):
+                for j in range(int(len(circ)/64)):
+                    pulse.play(circ[j*64:(j+1)*64], pulse.drive_channel(0))
+                    pulse.shift_phase(par[j],pulse.drive_channel(0))
             pulse.measure(qubits=[0], registers=[pulse.MemorySlot(0)])
         for i in range(len(par)):
             temp.assign_parameters({par[i]: traj[i]}, inplace=True)
@@ -508,13 +508,32 @@ def shift_all(circ, traj):
         final.append((np.cos(start) + 1j*np.sin(start))*i)
         start+=traj[j]
     return final
+
+def shift_all_2(circ, traj):
+    final = []
+    start = 0
+    for j,i in enumerate(circ):
+        final.append((np.cos(start) + 1j*np.sin(start))*i)
+        start=traj[j] - start
+    return final
         
-def parametrize_circ_1(circ,noise_traj_list,backend):
+def parametrize_circ_1(circ,noise_traj_list,backend,l):
     par = qk.circuit.ParameterVector('thetha', length=int(len(circ)))
     batch = []
     for traj in noise_traj_list:
         with pulse.build(backend=backend,default_alignment='sequential') as temp:
-            pulse.play(shift_all(circ,traj), pulse.drive_channel(0))
+            for _ in range(l):
+                pulse.play(shift_all(circ,traj), pulse.drive_channel(0))
+            pulse.measure(qubits=[0], registers=[pulse.MemorySlot(0)])
+        batch.append(block_to_schedule(temp))
+    return batch
+
+def parametrize_circ_2(circ,noise_traj_list,backend):
+    par = qk.circuit.ParameterVector('thetha', length=int(len(circ)))
+    batch = []
+    for traj in noise_traj_list:
+        with pulse.build(backend=backend,default_alignment='sequential') as temp:
+            pulse.play(shift_all_2(circ,traj), pulse.drive_channel(0))
             pulse.measure(qubits=[0], registers=[pulse.MemorySlot(0)])
         batch.append(block_to_schedule(temp))
     return batch
@@ -535,11 +554,9 @@ def runfunc(circ,backend_sim):
     #for i in circ:
     rabi_qobj = transpile(circ, backend=backend_sim)
     results = (backend_sim.run(rabi_qobj,shots = shots).result())
-    print("done")
     return results
 
-
-def Spec(data,start,end,num_center_freqs=100,backend=backend, option = 0,name="output"):  
+def Spec(data,l,start,end,num_center_freqs=100,backend=backend, option = 0,name="output"):  
     #option 0 beaks upp pulse into 64dt chuncks option 1 will morph shift into pulse
     if isinstance(data,Custom_Fgp):
        data = data.norm*data.pi_p
@@ -550,22 +567,21 @@ def Spec(data,start,end,num_center_freqs=100,backend=backend, option = 0,name="o
     circ_batch = []
     center_idxs=[]
     centers=[]
-    omega = 0
+    #omega = 0
     all_probs = np.zeros([num_center_freqs, 2])
     for center_idx, center in enumerate(np.linspace(start, end, num_center_freqs)): # vary noise center frequency
         center_idxs.append(center_idx)
-        #print('Probing Filter Function at Normalized Frequency: ', center)
         # Generate noise trajectories
-        omega = center*(2)/float(backend.configuration().dt)
+        #omega = center*(2)/float(backend.configuration().dt)
         centers.append(center)
         a, b = generate_noise_params(noise_power, center,len(data))
         noise_traj_list = np.array(schwarma_trajectories(a, b, num_gates, num_noise_trajs))
     
         # Build noisy circuit dictionary
         if(not option):
-            circ_batch+=(parametrize_circ(data,noise_traj_list,backend))
+            circ_batch+=(parametrize_circ(data,noise_traj_list,backend,l))
         else:
-            circ_batch+=(parametrize_circ_1(data,noise_traj_list,backend))
+            circ_batch+=(parametrize_circ_1(data,noise_traj_list,backend,l))
 
     # Run circuits
     #armonk_model = PulseSystemModel.from_backend(backend)
@@ -585,7 +601,10 @@ def Spec(data,start,end,num_center_freqs=100,backend=backend, option = 0,name="o
     counter = 0
     for i in range(int(len(circ_batch)/num_noise_trajs)):
         for circ in circ_batch[i*num_noise_trajs:((i+1)*num_noise_trajs)]:
-            one_counts = results[cc].get_counts().get('1')#zero_counts = results.get_counts(cc).get('1')
+            if (l%2==1):
+                one_counts = results[cc].get_counts().get('1')
+            else:
+                one_counts = results[cc].get_counts().get('0')#zero_counts = results.get_counts(cc).get('1')
             if (one_counts == None): 
                 one_counts=0
            #print(one_counts)
@@ -694,3 +713,21 @@ def Cgmp_Spec(data,start,end,num_center_freqs=100,backend=backend, option = 0,na
         prob = 0
     final = spec_data(all_probs, circ_batch,name=name)
     return final
+
+def X_fidel(pulsee,backend,N):
+    results = []
+    for i in range(int(N)):
+        with pulse.build(backend=backend,default_alignment='sequential') as circ:
+            for _ in range(i+1):
+                pulse.call(pulsee.Create_Pulse())
+            pulse.measure(qubits=[0], registers=[pulse.MemorySlot(0)])
+        if ((i+1)%2==0):
+            result = runfunc(block_to_schedule(circ),backend).get_counts().get('0')/shots
+            results.append(result)
+        else: 
+            result = runfunc(block_to_schedule(circ),backend).get_counts().get('1')/shots
+            results.append(result)
+    plt.scatter(np.array(range(N)), results)
+    plt.ylabel('Survival Probability')
+    plt.xlabel('Number of X gates')  
+    plt.show()
