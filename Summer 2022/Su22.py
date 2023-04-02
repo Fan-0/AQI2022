@@ -56,9 +56,9 @@ test_set= [1,0.5,0.25,2]
     
 #defenitions for spectroscopy
 cpu_count = np.rint(os.cpu_count()*0.8)
-noise_power = 1e-3
-num_noise_trajs = 3
-shots = 100
+noise_power = 5e-3
+num_noise_trajs = 10
+shots = 500
 backend = FakeOpenPulse2Q()#ConfigurableFakeBackend("memer",1)
 
 #Pickle fuctions
@@ -482,7 +482,7 @@ def generate_anim(circ,backend, output):
 def generate_noise_params(s_pow, w0,NN):
     a = [1]
     BW = 0.005 # changes narrowness of noise spectrum
-    b = si.firwin(NN, BW)*np.cos(w0*np.pi*np.arange(NN))
+    b = si.firwin(2*NN, BW)*np.cos(w0*np.pi*np.arange(2*NN))
     b = b/la.norm(b)*np.sqrt(s_pow)
     return a, b
 
@@ -576,12 +576,13 @@ def Spec(data,l,start,end,num_center_freqs=100,backend=backend, option = 0,name=
         centers.append(center)
         a, b = generate_noise_params(noise_power, center,len(data))
         noise_traj_list = np.array(schwarma_trajectories(a, b, num_gates, num_noise_trajs))
-    
+        for i in range(len(noise_traj_list)):
+            noise_traj_list[i] = noise_traj_list[i]*np.sqrt(noise_power)/np.max(np.abs(noise_traj_list[i]))
         # Build noisy circuit dictionary
         if(not option):
             circ_batch+=(parametrize_circ(data,noise_traj_list,backend,l))
         else:
-            circ_batch+=(parametrize_circ_1(data,noise_traj_list,backend,l))
+            circ_batch+=(parametrize_circ_1(data,noise_traj_list,backend,1))
 
     # Run circuits
     #armonk_model = PulseSystemModel.from_backend(backend)
