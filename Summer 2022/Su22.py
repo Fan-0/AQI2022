@@ -3,7 +3,9 @@ import warnings
 import numpy as np
 import matplotlib
 import random
+import cirq
 import matplotlib.pyplot as plt
+from mezze.tfq import *
 import qiskit as qk
 from IPython.display import display
 from qiskit import IBMQ, pulse
@@ -56,8 +58,8 @@ test_set= [1,0.5,0.25,2]
     
 #defenitions for spectroscopy
 cpu_count = np.rint(os.cpu_count()*0.8)
-noise_power = 5e-3
-num_noise_trajs = 10
+noise_power = 5e-1
+num_noise_trajs = 30
 shots = 500
 backend = FakeOpenPulse2Q()#ConfigurableFakeBackend("memer",1)
 
@@ -481,9 +483,9 @@ def generate_anim(circ,backend, output):
 
 def generate_noise_params(s_pow, w0,NN):
     a = [1]
-    BW = 0.005 # changes narrowness of noise spectrum
-    b = si.firwin(2*NN, BW)*np.cos(w0*np.pi*np.arange(2*NN))
-    b = b/la.norm(b)*np.sqrt(s_pow)
+    BW = 0.001 # changes narrowness of noise spectrum
+    b = si.firwin(NN, BW)*np.cos(w0*np.arange(NN))
+    b = b/la.norm(b)*.1
     return a, b
 
 def parametrize_circ(circ,noise_traj_list,backend,l):
@@ -565,6 +567,7 @@ def Spec(data,l,start,end,num_center_freqs=100,backend=backend, option = 0,name=
     else:
         num_gates=int(len(data)/64)
     circ_batch = []
+    dummy = cirq.Circuit([cirq.I(cirq.GridQubit(1,1))]*num_gates)
     center_idxs=[]
     centers=[]
     #omega = 0
@@ -574,10 +577,10 @@ def Spec(data,l,start,end,num_center_freqs=100,backend=backend, option = 0,name=
         # Generate noise trajectories
         #omega = center*(2)/float(backend.configuration().dt)
         centers.append(center)
-        a, b = generate_noise_params(noise_power, center,len(data))
-        noise_traj_list = np.array(schwarma_trajectories(a, b, num_gates, num_noise_trajs))
-        for i in range(len(noise_traj_list)):
-            noise_traj_list[i] = noise_traj_list[i]*np.sqrt(noise_power)/np.max(np.abs(noise_traj_list[i]))
+        a, b = generate_noise_params(noise_power, center,num_gates)
+        noise_traj_list = np.array((SimpleDephasingSchWARMAFier(b,[1,])).gen_noise_instances(dummy,num_noise_trajs))#np.array(schwarma_trajectories(a, b, num_gates, num_noise_trajs))
+        for du in range(num_noise_trajs):
+            noise_traj_list[du] *= np.sqrt(noise_power**2/np.sum(noise_traj_list[du]**2))
         # Build noisy circuit dictionary
         if(not option):
             circ_batch+=(parametrize_circ(data,noise_traj_list,backend,l))
