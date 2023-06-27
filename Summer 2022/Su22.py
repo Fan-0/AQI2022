@@ -20,6 +20,7 @@ from qiskit.providers.aer.pulse import PulseSystemModel
 from qiskit.providers.aer import PulseSimulator
 from qiskit.compiler import assemble
 from scipy.optimize import curve_fit
+from tqdm import tqdm
 warnings.filterwarnings('ignore')
 from qiskit.tools.jupyter import *
 from qiskit import QuantumRegister, QuantumCircuit, ClassicalRegister, Aer
@@ -59,8 +60,8 @@ test_set= [1,0.5,0.25,2]
 #defenitions for spectroscopy
 cpu_count = np.rint(os.cpu_count()*0.8)
 noise_power = 5e-1
-num_noise_trajs = 30
-shots = 500
+num_noise_trajs = 100
+shots = 3000
 backend = FakeOpenPulse2Q()#ConfigurableFakeBackend("memer",1)
 
 #Pickle fuctions
@@ -207,7 +208,7 @@ class Custom_Fgp:
         return drive_amps,rabi_values[0]
     
     def full_cal(self):
-        drive_amps,rabi_values = self.Cali(25,1)
+        drive_amps,rabi_values = self.Cali(100,1)
         print(rabi_values) 
         print(np.gradient(rabi_values,2))
         print(np.argmax(np.gradient(rabi_values,2)<0))
@@ -215,7 +216,7 @@ class Custom_Fgp:
         fit_params, y_fit, error = fit_function(drive_amps,
                                  rabi_values, 
                                  lambda x, drive_period:(-0.5*np.cos(2*np.pi*x/drive_period)+0.5),
-                                         [drive_period+0.2])
+                                         [2*drive_period-0.02])
         drive_period = fit_params[0]
         pi_amp = abs(drive_period/2)
         plt.scatter(drive_amps, rabi_values, color='black')
@@ -578,7 +579,7 @@ def Spec(data,l,start,end,num_center_freqs=100,backend=backend, option = 0,name=
         #omega = center*(2)/float(backend.configuration().dt)
         centers.append(center)
         a, b = generate_noise_params(noise_power, center,num_gates)
-        noise_traj_list = np.array((SimpleDephasingSchWARMAFier(b,[1,])).gen_noise_instances(dummy,num_noise_trajs))#np.array(schwarma_trajectories(a, b, num_gates, num_noise_trajs))
+        noise_traj_list = (SimpleDephasingSchWARMAFier(b,[1,])).gen_noise_instances(dummy,num_noise_trajs)#np.array(schwarma_trajectories(a, b, num_gates, num_noise_trajs))
         for du in range(num_noise_trajs):
             noise_traj_list[du] *= np.sqrt(noise_power**2/np.sum(noise_traj_list[du]**2))
         # Build noisy circuit dictionary
@@ -591,7 +592,7 @@ def Spec(data,l,start,end,num_center_freqs=100,backend=backend, option = 0,name=
     #armonk_model = PulseSystemModel.from_backend(backend)
     #backend_sim = PulseSimulator(system_model=armonk_model)
     pool = mp.Pool(mp.cpu_count())
-    results = pool.starmap(runfunc, [(i,backend) for i in circ_batch])
+    results = pool.starmap(runfunc, tqdm([(i,backend) for i in circ_batch]))
     pool.close()
     #Parallel(n_jobs=cpu_count,verbose=10)(delayed(runfunc)(i,backend) for i in circ_batch)
     #runfunc(circ_batch,backend)

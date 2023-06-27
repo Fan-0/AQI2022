@@ -13,13 +13,17 @@ def main():
     #pulse = qs.Custom_Fgp("spec",qs.loadData(args[0]))
     test = qs.loadData(args[0])
     backend = FakeOpenPulse2Q()
-    pulse = qs.Custom_Fgp('low_freq',test,backend)
+    test_2 =[]
+    for _ in range(2):
+        for i in test:
+            test_2.append(i)
+    pulse = qs.Custom_Fgp('low_freq',test_2,backend)
     #data = qs.Cgmp_Spec(pulse,0.2,0.98,10,name=str(args[0]).split('\\')[1][:-2])
     data = []
     fig = plt.figure(dpi=100)
     ax = fig.add_subplot(111)
     for i in range(int(args[1])):
-        data.append(qs.Spec(pulse.norm*pulse.pi_p*(i+1),i+1,0,0.3,30,option=1,name=str(args[0]).split('\\')[1][:-2]))
+        data.append(qs.Spec(pulse.norm*pulse.pi_p*(2*i+1),1,0,0.5,100,option=1,name=str(args[0]).split('\\')[1][:-2]))
     for i in range(int(args[1])):
         ax.plot(data[i].all_probs[:,0], data[i].all_probs[:,1],label='N='+str(i+1))
     ax.legend()

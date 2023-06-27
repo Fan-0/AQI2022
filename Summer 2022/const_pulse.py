@@ -17,7 +17,7 @@ def main():
     fig = plt.figure(dpi=100)
     ax = fig.add_subplot(111)
     name = str("spec_series"+"_" +args[0]+"_"+ args[1]+"L")
-    data = (qs.Spec(test,1,0.15,0.25,100,option=1,name=name))
+    data = (qs.Spec(test,1,0,0.5,100,option=1,name=name))
     ax.plot(data.all_probs[:,0], data.all_probs[:,1])
     plt.show()
     data.dump()
